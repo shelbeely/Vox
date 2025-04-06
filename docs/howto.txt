@@ -1,0 +1,96 @@
+Vox - Your Voice Journey Companion
+==================================
+
+Welcome to Vox! This app is designed with love to help trans folks explore, train, and celebrate their authentic voice. Here's a simple guide to get you started.
+
+---
+
+What is Vox?
+------------
+
+Vox is a friendly voice coach that listens to your voice, gives you real-time feedback, and offers supportive advice. It helps you practice pitch, resonance, and clarity, all while respecting your name and pronouns.
+
+---
+
+Getting Started
+---------------
+
+1. **Open Vox**  
+   - Visit the website or open the app on your device.  
+   - You should see the Vox home screen with buttons and charts.
+
+2. **Set Your Info**  
+   - Enter your **name**.  
+   - Choose your **pronouns** from the list (like she/her, he/him, they/them, or neopronouns).  
+   - Pick your **voice goal**: Feminine, Masculine, or Unspecified.  
+   - Click **Save**.  
+   - You can edit this info anytime.
+
+---
+
+Practicing Your Voice
+---------------------
+
+1. **Start Recording**  
+   - Click the **mic** button (🎤) to begin.  
+   - Speak or sing naturally.  
+   - Watch the charts and gauges update live with your pitch and voice details.
+
+2. **Stop Recording**  
+   - Click the **stop** button (⏹️) when you're done.  
+   - Your recording is saved automatically.
+
+3. **See Your Progress**  
+   - Scroll down to the **History** section.  
+   - Click **play** (▶️) to listen to past recordings.  
+   - See your pitch, clarity, and resonance over time.
+
+---
+
+Using the Target Pitch
+----------------------
+
+- Set a **target pitch** number (in Hz) that matches your goal.  
+- Click **Start Target Pitch** (🎵) to hear a tone.  
+- Try to match your voice to the tone.  
+- Click **Stop Target Pitch** (⏸️) to turn it off.
+
+---
+
+Chatting with Vox
+-----------------
+
+- Type a message in the chat box at the bottom.  
+- Click **Send** (📤).  
+- Vox will reply with friendly, personalized advice.  
+- You can ask questions or just chat for support!
+
+---
+
+Clearing Your History
+---------------------
+
+- Click **Clear History** (🗑️) if you want to delete all past recordings and start fresh.  
+- Vox respects your privacy and control.
+
+---
+
+Tips for a Great Session
+------------------------
+
+- Use headphones to avoid feedback noise.  
+- Find a quiet space.  
+- Relax and be yourself!  
+- Practice regularly — your voice journey is unique and valid.
+
+---
+
+Questions or Support?
+---------------------
+
+Vox is built to empower you. If you have questions or ideas, reach out to the developer or your community.
+
+---
+
+With love and pride,  
+**Vox Team**

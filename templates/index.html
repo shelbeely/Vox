@@ -1,0 +1,130 @@
+<!--
+Hey beautiful soul! 💖
+
+This is Vox, lovingly crafted by Shelbeely (a proud trans woman) for our vibrant trans community.
+This page is your safe, affirming space to explore, train, and celebrate your authentic voice.
+Every element here is designed to uplift, empower, and support you on your journey.
+
+You are valid. You are powerful. Your voice matters. 🌈✨
+
+With all my love,
+Shelbeely
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vox - Voice Therapy Coach</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/justgage/1.4.0/justgage.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Vox - A Voice Therapy Coach for Trans Individuals</h1>
+        
+        <!-- Media controls -->
+        <div class="media-bar">
+            <button id="recordButton" class="media-button" aria-label="Start Recording"><span class="material-icons">mic</span></button>
+            <button id="stopButton" class="media-button" aria-label="Stop Recording"><span class="material-icons">stop</span></button>
+            <button id="startTargetButton" class="media-button" aria-label="Start Target Pitch"><span class="material-icons">tune</span></button>
+            <button id="stopTargetButton" class="media-button" aria-label="Stop Target Pitch"><span class="material-icons">pause</span></button>
+            <input type="number" id="targetPitch" value="150" min="50" max="400" aria-label="Target Pitch in Hz">
+        </div>
+
+        <!-- User info -->
+        <div id="userInfoInput" class="user-info-row">
+            <input type="text" id="userName" placeholder="Your Name" aria-label="Your Name">
+<select id="userPronouns" aria-label="Your Pronouns">
+    <option value="any">Any</option>
+    <option value="she/her/hers/herself">She/Her</option>
+    <option value="he/him/his/himself">He/Him</option>
+    <option value="they/them/theirs/themselves">They/Them</option>
+    <option value="xe/xem/xirs/xemself">Xe/Xem</option>
+    <option value="ze/zir/zirs/zirself">Ze/Zir</option>
+    <option value="ze/hir/hirs/hirself">Ze/Hir</option>
+    <option value="ey/em/eirs/emself">Ey/Em</option>
+    <option value="ve/ver/vis/verself">Ve/Ver</option>
+    <option value="tey/ter/tem/terself">Tey/Ter</option>
+    <option value="e/em/es/eself">E/Em</option>
+    <option value="zie/zim/zir/zirself">Zie/Zim</option>
+    <option value="sie/sir/hir/hirself">Sie/Sir</option>
+    <option value="it/it/its/itself">It/Its</option>
+    <option value="fae/faer/faers/faerself">Fae/Faer</option>
+    <option value="ae/aer/aers/aerself">Ae/Aer</option>
+    <option value="per/per/pers/perself">Per/Pers</option>
+    <option value="pup/pup/puppy/pupself">Pup/Pupself</option>
+    <option value="kit/kit/kits/kitself">Kit/Kitself</option>
+    <option value="bun/bun/buns/bunself">Bun/Bunself</option>
+    <option value="star/star/stars/starself">Star/Starself</option>
+    <option value="void/void/voids/voidself">Void/Voidself</option>
+    <option value="nyx/nyx/nyxs/nyxself">Nyx/Nyxself</option>
+    <option value="she/they/her/them/hers/theirs/herself/themselves">She/They</option>
+    <option value="he/they/him/them/his/theirs/himself/themselves">He/They</option>
+</select>
+            <div class="select-wrapper">
+                <select id="targetGender" aria-label="Target Gender">
+                    <option value="unspecified">Unspecified</option>
+                    <option value="feminine">Feminine</option>
+                    <option value="masculine">Masculine</option>
+                </select>
+                <span class="tooltip">Set your voice goal!</span>
+            </div>
+            <button onclick="updateUserInfo()" aria-label="Save User Info"><span class="material-icons">save</span> Save</button>
+        </div>
+        <div id="userInfoSummary" class="user-info-summary" style="display: none;">
+            <span id="summaryText"></span>
+            <button class="edit-button" onclick="editUserInfo()" aria-label="Edit User Info"><span class="material-icons">edit</span> Edit</button>
+        </div>
+
+        <!-- Pitch and volume display -->
+        <div id="pitchDisplay" class="pitch-display" role="status" aria-live="polite"></div>
+        <div id="volumeDisplay" class="pitch-display" role="status" aria-live="polite"></div>
+        <div id="resonanceDisplay" class="pitch-display" role="status" aria-live="polite"></div>
+
+        <!-- Charts and gauges -->
+        <div class="charts-row">
+            <div class="chart-container">
+                <canvas id="pitchChart" aria-label="Pitch over Time"></canvas>
+            </div>
+            <div class="chart-container">
+                <div id="pitchGauge" aria-label="Current Pitch Gauge"></div>
+            </div>
+            <div class="chart-container">
+                <div id="hnrGauge" aria-label="Harmonic-to-Noise Ratio Gauge"></div>
+            </div>
+            <div class="chart-container">
+                <canvas id="pitchStabilityChart" aria-label="Pitch Stability Meter"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="harmonicsChart" aria-label="Harmonics Amplitude"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="hnrChart" aria-label="HNR over Time"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="formantsChart" aria-label="Formants Frequency and Bandwidth"></canvas>
+            </div>
+        </div>
+
+        <!-- History and feedback -->
+        <ul id="historyList" role="log" aria-label="Past Performances"></ul>
+        <ul id="llmOutput" role="log" aria-label="Vox Feedback"></ul>
+
+        <!-- Chat input -->
+        <textarea id="chatInput" placeholder="Chat with Vox..." aria-label="Chat with Vox"></textarea>
+        <button onclick="sendChat()" aria-label="Send Chat Message"><span class="material-icons">send</span> Send</button>
+        <button onclick="clearHistory()" aria-label="Clear History"><span class="material-icons">delete</span> Clear History</button>
+
+        <!-- Error box -->
+        <div id="errorBox" role="alert" aria-live="assertive"></div>
+    </div>
+    <script src="/static/scripts.js"></script>
+</body>
+</html>
