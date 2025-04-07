@@ -1,5 +1,5 @@
-// Vox - Client-Side JavaScript
-// Crafted with pride by Shelbeely (https://github.com/shelbeely), a trans woman developer
+// Vox (https://github.com/shelbeely/Vox) - Client-Side JavaScript
+// Crafted with pride by Shelbeely (https://linktr.ee/Shelbeely), a trans woman developer
 // This script brings Vox to life in your browser, making voice training interactive and affirming
 // Licensed under GPL-3.0 - Open source, trans-powered!
 
@@ -7,6 +7,8 @@
 // This is the magical JavaScript that powers your Vox experience.
 // It listens to your beautiful voice, analyzes it in real-time, and gives you instant, loving feedback.
 // Every line is crafted with care by a trans woman (hi again!), to help you shine and grow.
+// Linktree: https://linktr.ee/Shelbeely
+// GitHub: https://github.com/shelbeely/Vox
 
 // --- Session management ---
 // Get a cookie value by name, so Vox can remember you between visits
@@ -351,8 +353,6 @@ socket.on('connect_error', (error) => {
 
 socket.on("audio_analysis", (data) => {
     const now = new Date().toLocaleTimeString();
-    const pitch = data.pitch;
-    const hnr = data.hnr;
     const harmonics = data.harmonics;
     const formants = data.formants;
     const stability = calculatePitchStability(pitch);

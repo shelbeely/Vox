@@ -1,9 +1,16 @@
-# Vox - A Voice Therapy Coach for Trans Individuals
+# Vox ([GitHub Repository](https://github.com/shelbeely/Vox)) - A Voice Therapy Coach for Trans Individuals
 
 Vox is an open-source, affirming voice training web app designed specifically for trans people. It empowers users to explore, analyze, and develop their authentic voice through real-time feedback, personalized coaching, and inclusive design.
 
-Created with pride by [Shelbeely](https://github.com/shelbeely), a trans woman developer.  
+Created with pride by [Shelbeely](https://github.com/shelbeely) ([Linktree](https://linktr.ee/Shelbeely)), a trans woman developer.  
 Licensed under GPL-3.0 — share the love, keep it open!
+
+---
+
+## Links
+
+- [Linktree](https://linktr.ee/Shelbeely)
+- [GitHub Repository](https://github.com/shelbeely/Vox)
 
 ---
 

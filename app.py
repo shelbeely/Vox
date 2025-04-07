@@ -2,9 +2,11 @@
 # Migrated to Supabase PostgreSQL with asyncpg
 
 # Hey beautiful soul! 💖
-# This is Vox, crafted lovingly by a trans woman (hi, it's Shelbeely!) for our vibrant trans community.
+# This is Vox (https://github.com/shelbeely/Vox), crafted lovingly by a trans woman (hi, it's Shelbeely! https://linktr.ee/Shelbeely) for our vibrant trans community.
 # This app is your gentle, affirming space to explore, train, and celebrate your authentic voice.
 # Every line of code here is meant to uplift, empower, and support you on your journey. You deserve it!
+# Linktree: https://linktr.ee/Shelbeely
+# GitHub: https://github.com/shelbeely/Vox
 
 # --- Importing all the magical libraries we need ---
 import os  # For handling file paths and environment secrets, keeping things tidy and secure
@@ -464,7 +466,7 @@ Provide personalized, supportive feedback on the user's voice based on these met
 
                 def do_request():
                     response = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
+                        model="google/gemini-2.0-flash-001",
                         messages=[
                             {"role": "system", "content": prompt}
                         ],
@@ -610,7 +612,7 @@ async def chat():
     system_prompt = LLM_PERSONALITY_PROMPT_BASE + f"\nUser info:\nName: {user_name}\nPronouns: {user_pronouns}\n"
 
     payload = {
-        "model": "openai/gpt-3.5-turbo",
+        "model": "google/gemini-2.0-flash-001",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message}
@@ -628,7 +630,7 @@ async def chat():
 
         def do_request():
             response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
+                model="google/gemini-2.0-flash-001",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
