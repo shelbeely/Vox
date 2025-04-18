@@ -85,12 +85,15 @@ async def verify_email(request: Request, db_pool=Depends(get_db_pool)):
         content={'status': 'success', 'message': 'Email verified successfully'}
     )
 
+from vox.database import create_session
+import uuid
+
 @router.post("/login", response_class=JSONResponse)
 async def login(request: Request, db_pool=Depends(get_db_pool)):
     data = await request.json()
     email = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
-
+    print(data)
     if not email or not password:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -118,13 +121,13 @@ async def login(request: Request, db_pool=Depends(get_db_pool)):
                 content={'status': 'error', 'message': 'Invalid credentials'}
             )
 
-        session = request.session
-        sid = session.get('id')
-        await conn.execute("UPDATE users SET session_id = $1 WHERE user_id = $2", sid, user['user_id'])
+        # Create a new session for the user
+        session_id = str(uuid.uuid4())
+        await create_session(db_pool, session_id, user_id=user['user_id'])
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
-        content={'status': 'success', 'message': 'Logged in'}
+        content={'status': 'success', 'message': 'Logged in', 'session_id': session_id}
     )
 
 @router.post("/request_password_reset", response_class=JSONResponse)
@@ -266,15 +269,7 @@ async def discord_callback(request: Request, db_pool=Depends(get_db_pool)):
     session = request.session
     async with db_pool.acquire() as conn:
         user = await conn.fetchrow("SELECT * FROM users WHERE discord_id = $1", discord_id)
-        if user:
-            sid = session.get('id')
-            await conn.execute("UPDATE users SET session_id = $1 WHERE user_id = $2", sid, user['user_id'])
-        else:
-            sid = session.get('id')
-            await conn.execute(
-                "INSERT INTO users (discord_id, email, email_verified, session_id) VALUES ($1, $2, TRUE, $3)",
-                discord_id, email, sid
-            )
+        # No longer update session_id in users table; session-user link is managed in sessions table
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

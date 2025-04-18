@@ -11,9 +11,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/raphael/2.3.0/raphael.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/justgage/1.4.0/justgage.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<!-- Add ml5.js for pitch detection -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ml5/0.12.2/ml5.min.js"></script>
 </head>
 <body>
 <div class="container">
+<div class="sidebar">
+  <h2>History</h2>
+  <ul id="historyList"></ul>
+</div>
+<div class="main-content">
 <h1>Vox - A Voice Therapy Coach for Trans Individuals</h1>
 
 <div style="margin-bottom: 10px;">
@@ -93,12 +100,13 @@
 </div>
 
 <button id="convertSelectedButton" style="margin:10px;">Convert Selected Recordings</button>
-<ul id="historyList"></ul>
-<ul id="llmOutput"></ul>
-
-<textarea id="chatInput" placeholder="Chat with Vox..."></textarea>
-<button onclick="sendChat()">Send</button>
-<button onclick="clearHistory()">Clear History</button>
+<!-- Real-time chat area -->
+<div id="chatArea" class="chat-area"></div>
+<div class="chat-input-row">
+  <input id="chatInput" type="text" placeholder="Chat with Vox..." autocomplete="off" />
+  <button id="sendButton">Send</button>
+  <button id="clearHistoryButton">Clear History</button>
+</div>
 
 <div id="errorBox"></div>
 
@@ -143,6 +151,7 @@
 </div>
 </div>
 
+</div>
 </div>
 <script src="/static/scripts.js"></script>
 </body>

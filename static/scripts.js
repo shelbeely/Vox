@@ -25,6 +25,25 @@ const sessionId = getCookie('session_id') || 'default';
 // Connect to the server with Socket.IO for real-time magic ✨
 const socket = io({ query: { sessionId: sessionId } });
 
+// --- Chat history fetch and render on page load ---
+fetch('/chat/history')
+    .then(response => response.json())
+    .then(data => {
+        const output = document.getElementById("llmOutput");
+        if (Array.isArray(data.messages)) {
+            data.messages.forEach(msg => {
+                const div = document.createElement("div");
+                div.className = msg.user_role === "user" ? "user-message" : "assistant-message";
+                div.textContent = msg.message;
+                output.appendChild(div);
+            });
+            output.scrollTop = output.scrollHeight;
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching chat history:', error);
+    });
+
 // --- Audio and UI state variables ---
 let isRecording = false;  // Are we currently recording your lovely voice?
 let audioContext;         // The Web Audio API context
@@ -208,32 +227,17 @@ async function startRecording() {
             analyser.fftSize = CHUNK;
             source.connect(analyser);
 
-            pitchDetector = new Tone.PitchDetect();
+            // Remove invalid Tone.PitchDetect usage and browser pitch detection.
             pitchSmoother = new Tone.Meter({ smoothing: 0.05 });
             volumeMeter = new Tone.Meter();
             fft = new Tone.FFT(2048);
             recorder = new Tone.Recorder();
 
             await Tone.start();
-            source.connect(pitchDetector);
-            pitchDetector.connect(pitchSmoother);
             source.connect(volumeMeter);
             source.connect(fft);
             source.connect(recorder);
             await recorder.start();
-
-            pitchDetector.on('pitch', (pitch) => {
-                if (pitch > 20) {
-                    const smoothedPitch = pitchSmoother.getValue() * pitch;
-                    const note = hzToNote(smoothedPitch);
-                    const display = document.getElementById("pitchDisplay");
-                    display.innerText = `Pitch (real-time): ${smoothedPitch.toFixed(2)} Hz (${note})`;
-                    display.className = "pitch-display " + (smoothedPitch > 85 && smoothedPitch < 400 ? "in-range" : "out-of-range");
-                    display.classList.remove('update-anim');
-                    void display.offsetWidth;
-                    display.classList.add('update-anim');
-                }
-            });
 
             setInterval(() => {
                 const volume = volumeMeter.getValue();
@@ -267,7 +271,7 @@ function stopRecording() {
         isRecording = false;
         stream.getTracks().forEach(track => track.stop());
         audioContext.close();
-        pitchDetector.dispose();
+        // Remove pitchDetector.dispose();
         pitchSmoother.dispose();
         volumeMeter.dispose();
         fft.dispose();
@@ -427,7 +431,21 @@ socket.on("llm_feedback", (data) => {
 });
 
 socket.on("chat_response", (data) => {
-    const listItem = document.createElement("li");
+    // data: { user_message, assistant_message }
+    const output = document.getElementById("llmOutput");
+    if (data.user_message) {
+        const userDiv = document.createElement("div");
+        userDiv.className = "user-message";
+        userDiv.textContent = data.user_message;
+        output.appendChild(userDiv);
+    }
+    if (data.assistant_message) {
+        const assistantDiv = document.createElement("div");
+        assistantDiv.className = "assistant-message";
+        assistantDiv.textContent = data.assistant_message;
+        output.appendChild(assistantDiv);
+    }
+    output.scrollTop = output.scrollHeight;
     listItem.innerHTML = `<span class="material-icons">chat</span> Vox: ${data.message}`;
     document.getElementById("llmOutput").prepend(listItem);
 });
@@ -559,28 +577,6 @@ function updateTargetGender(targetGender) {
     });
 }
 
-function sendChat() {
-    const message = document.getElementById("chatInput").value;
-    if (message) {
-        fetch('/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === "success") {
-                document.getElementById("chatInput").value = "";
-            } else {
-                showError(data.message || 'Failed to send chat.');
-            }
-        })
-        .catch(error => {
-            console.error('Error sending chat:', error);
-            showError('Failed to send chat.');
-        });
-    }
-}
 
 function showError(msg) {
     const errorBox = document.getElementById("errorBox");

@@ -94,3 +94,27 @@ async def update_recording_path_async(db_pool, sid, timestamp, recording_path):
             "UPDATE vocal_data SET recording_path = $1 WHERE session_id = $2 AND timestamp = $3",
             recording_path, sid, timestamp
         )
+
+# --- Chat Message Logic ---
+
+async def save_chat_message_async(db_pool, session_id, user_role, message, timestamp=None):
+    """
+    Save a chat message to the database.
+    """
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO chat_messages (session_id, user_role, message, timestamp) VALUES ($1, $2, $3, COALESCE($4, now()))",
+            session_id, user_role, message, timestamp
+        )
+
+async def fetch_chat_history_async(db_pool, session_id, limit=50):
+    """
+    Fetch the most recent chat messages for a session, ordered oldest to newest.
+    """
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT user_role, message, timestamp FROM chat_messages WHERE session_id = $1 ORDER BY timestamp DESC LIMIT $2",
+            session_id, limit
+        )
+        # Return in chronological order
+        return list(reversed([dict(row) for row in rows]))

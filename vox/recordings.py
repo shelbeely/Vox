@@ -22,6 +22,11 @@ async def save_recording(
 ):
     session = request.session
     sid = session.get("id", "default")
+    pool = request.app.state.db_pool
+    # Look up user_id from session
+    async with pool.acquire() as conn:
+        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+        user_id = session_row["user_id"] if session_row else None
     if not recording:
         return JSONResponse({"status": "error", "message": "No recording file provided"}, status_code=400)
 
@@ -56,18 +61,18 @@ async def save_recording(
             logging.error(f"Gender transform error: {e}")
             transformed_filepath = None
 
-    pool = request.app.state.db_pool
+    # Insert vocal_data with user_id and session_id
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO vocal_data (session_id, timestamp, pitch, hnr, harmonics, formants, recording_path) "
-            "VALUES ($1, $2, NULL, NULL, NULL, NULL, $3)",
-            sid, timestamp, filepath
+            "INSERT INTO vocal_data (user_id, session_id, timestamp, pitch, hnr, harmonics, formants, recording_path) "
+            "VALUES ($1, $2, $3, NULL, NULL, NULL, NULL, $4)",
+            user_id, sid, timestamp, filepath
         )
         if transformed_filepath:
             try:
                 await conn.execute(
-                    "UPDATE vocal_data SET transformed_path = $1 WHERE session_id = $2 AND timestamp = $3",
-                    transformed_filepath, sid, timestamp
+                    "UPDATE vocal_data SET transformed_path = $1 WHERE user_id = $2 AND session_id = $3 AND timestamp = $4",
+                    transformed_filepath, user_id, sid, timestamp
                 )
             except Exception:
                 pass

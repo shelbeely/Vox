@@ -4,7 +4,6 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE IF NOT EXISTS users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id UUID UNIQUE, -- link anonymous sessions
     user_name TEXT NOT NULL,
     user_pronouns TEXT NOT NULL,
     target_gender TEXT DEFAULT 'unspecified',
@@ -54,3 +53,15 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+-- Chat messages for real-time and history
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id SERIAL PRIMARY KEY,
+    session_id UUID NOT NULL,
+    user_role TEXT NOT NULL, -- 'user' or 'assistant'
+    message TEXT NOT NULL,
+    timestamp TIMESTAMP DEFAULT now(),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_session_id ON chat_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_timestamp ON chat_messages(timestamp);

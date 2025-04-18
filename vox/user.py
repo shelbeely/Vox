@@ -16,10 +16,13 @@ async def set_target_gender(request: Request, db_pool=Depends(get_db_pool)):
     target_gender = data.get("target", "unspecified").strip()
 
     async with db_pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE users SET target_gender = $1 WHERE session_id = $2",
-            target_gender, sid
-        )
+        # Update by user_id, not session_id
+        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+        if session_row:
+            await conn.execute(
+                "UPDATE users SET target_gender = $1 WHERE user_id = $2",
+                target_gender, session_row["user_id"]
+            )
 
     request.app.state.logger.info(f"Session {sid} - set_target_gender: {target_gender}")
     return JSONResponse(
@@ -44,11 +47,13 @@ async def set_user_info(request: Request, db_pool=Depends(get_db_pool)):
         )
 
     async with db_pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO users (session_id, user_name, user_pronouns) VALUES ($1, $2, $3) "
-            "ON CONFLICT (session_id) DO UPDATE SET user_name = EXCLUDED.user_name, user_pronouns = EXCLUDED.user_pronouns",
-            sid, user_name, user_pronouns
-        )
+        # Set user info by user_id, not session_id
+        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+        if session_row:
+            await conn.execute(
+                "UPDATE users SET user_name = $1, user_pronouns = $2 WHERE user_id = $3",
+                user_name, user_pronouns, session_row["user_id"]
+            )
 
     request.app.state.logger.info(f"Session {sid} - set_user_info: Name: {user_name}, Pronouns: {user_pronouns}")
     return JSONResponse(
@@ -61,10 +66,16 @@ async def get_performances(request: Request, db_pool=Depends(get_db_pool)):
     session = request.session
     sid = session.get('id', 'default')
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT timestamp, pitch, hnr, harmonics, formants, recording_path FROM vocal_data WHERE session_id = $1 ORDER BY timestamp DESC",
-            sid
-        )
+        # Look up user_id from session
+        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+        user_id = session_row["user_id"] if session_row else None
+        if user_id:
+            rows = await conn.fetch(
+                "SELECT timestamp, pitch, hnr, harmonics, formants, recording_path FROM vocal_data WHERE user_id = $1 ORDER BY timestamp DESC",
+                user_id
+            )
+        else:
+            rows = []
     performances = [
         {
             "timestamp": row['timestamp'].isoformat() if row['timestamp'] else None,
@@ -87,7 +98,14 @@ async def profile(request: Request, db_pool=Depends(get_db_pool)):
     sid = session.get('id')
     async with db_pool.acquire() as conn:
         if request.method == 'GET':
-            user = await conn.fetchrow("SELECT * FROM users WHERE session_id = $1", sid)
+            # Fetch user by user_id from session
+            session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+            if not session_row:
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={'status': 'error', 'message': 'User not found'}
+                )
+            user = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", session_row["user_id"])
             if not user:
                 return JSONResponse(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -121,8 +139,15 @@ async def profile(request: Request, db_pool=Depends(get_db_pool)):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     content={'status': 'error', 'message': 'No updates provided'}
                 )
-            params.append(sid)
-            query = f"UPDATE users SET {', '.join(updates)} WHERE session_id = ${len(params)}"
+            # Update by user_id from session
+            session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+            if not session_row:
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={'status': 'error', 'message': 'User not found'}
+                )
+            params.append(session_row["user_id"])
+            query = f"UPDATE users SET {', '.join(updates)} WHERE user_id = ${len(params)}"
             await conn.execute(query, *params)
             return JSONResponse(
                 status_code=status.HTTP_200_OK,

@@ -170,3 +170,59 @@ def handle_save_recording_socket(data):
         'formants': data.get('formants'),
         'recording_path': recording_path
     }, room=sid)
+
+# --- Real-time Chat Handler ---
+
+from vox.database import save_chat_message_async
+from vox.llm import chat_with_llm
+from vox.utils import LLM_PERSONALITY_PROMPT_BASE
+
+@socketio.on('chat_message')
+def handle_chat_message(data):
+    sid = session.get('id', 'default')
+    db_pool = get_db_pool()
+    logger = getattr(app.state, "logger", None)
+    user_message = data.get('message', '').strip()
+    if not user_message:
+        socketio.emit('chat_response', {
+            'user_role': 'system',
+            'message': 'Empty message',
+            'timestamp': None
+        }, room=sid)
+        return
+
+    async def process_chat():
+        try:
+            # Save user message
+            await save_chat_message_async(db_pool, sid, 'user', user_message)
+            # Fetch user info for prompt
+            async with db_pool.acquire() as conn:
+                user = await conn.fetchrow(
+                    "SELECT user_name, user_pronouns FROM users WHERE session_id = $1",
+                    sid
+                )
+            user_name = user['user_name'] if user and user['user_name'] else 'friend'
+            user_pronouns = user['user_pronouns'] if user and user['user_pronouns'] else 'they/them/theirs/themselves'
+            system_prompt = LLM_PERSONALITY_PROMPT_BASE + f"\nUser info:\nName: {user_name}\nPronouns: {user_pronouns}\n"
+            # Get LLM reply
+            llm_reply = await chat_with_llm(system_prompt, user_message)
+            # Save LLM reply
+            await save_chat_message_async(db_pool, sid, 'assistant', llm_reply)
+            # Emit both messages to client
+            socketio.emit('chat_response', {
+                'user_role': 'user',
+                'message': user_message,
+            }, room=sid)
+            socketio.emit('chat_response', {
+                'user_role': 'assistant',
+                'message': llm_reply,
+            }, room=sid)
+        except Exception as e:
+            if logger:
+                logger.error(f"Chat error: {e}")
+            socketio.emit('chat_response', {
+                'user_role': 'system',
+                'message': 'Failed to get response from LLM',
+            }, room=sid)
+
+    asyncio.run_coroutine_threadsafe(process_chat(), asyncio.get_event_loop())

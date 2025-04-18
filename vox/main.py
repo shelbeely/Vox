@@ -33,21 +33,28 @@ async def index(request: Request):
         session_obj = await get_session(pool, sid)
     if not session_obj:
         sid = str(uuid.uuid4())
-        await create_session(pool, sid)
+        user_id = str(uuid.uuid4())
+        # Create user first
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO users (user_id, user_name, user_pronouns) VALUES ($1, $2, $3)",
+                user_id, "friend", "they/them/theirs/themselves"
+            )
+        await create_session(pool, sid, user_id=user_id)
         new_session = True
     else:
         new_session = False
 
     async with pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT user_name, user_pronouns FROM users WHERE session_id = $1", sid)
-        if not user:
-            await conn.execute(
-                "INSERT INTO users (session_id, user_name, user_pronouns) VALUES ($1, $2, $3)",
-                sid, "friend", "they/them/theirs/themselves"
-            )
+        # Fetch user by session from sessions table, then get user info
+        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+        user = None
+        if session_row and session_row["user_id"]:
+            user = await conn.fetchrow("SELECT user_name, user_pronouns FROM users WHERE user_id = $1", session_row["user_id"])
 
     if logger:
-        logger.info(f"Session {sid} - login: User accessed Vox")
+        user_name = user["user_name"] if user and "user_name" in user else "friend"
+        logger.info(f"Session {sid} - login: User '{user_name}' accessed Vox")
 
     response = templates.TemplateResponse("index.html", {"request": request})
     # Set session cookie if new

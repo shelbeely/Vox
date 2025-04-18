@@ -80,3 +80,26 @@ async def chat(request: Request, db_pool=Depends(get_db_pool)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"status": "error", "message": "Failed to get response from LLM"}
         )
+
+from fastapi import Query
+from vox.database import fetch_chat_history_async
+
+@router.get("/history", response_class=JSONResponse)
+async def chat_history(request: Request, limit: int = Query(50), db_pool=Depends(get_db_pool)):
+    """
+    Fetch the most recent chat messages for the current session.
+    """
+    session = request.session
+    sid = session.get('id', 'default')
+    try:
+        messages = await fetch_chat_history_async(db_pool, sid, limit)
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": "success", "messages": messages}
+        )
+    except Exception as e:
+        request.app.state.logger.error(f"Chat history error: {e}")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": "error", "message": "Failed to fetch chat history"}
+        )
