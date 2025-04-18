@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
+from vox.user import get_session_id
 import openai
 import asyncio
 import os
@@ -21,12 +22,10 @@ def get_db_pool(request: Request):
 
 @router.post("/", response_class=JSONResponse)
 @limiter.limit("50/hour")
-async def chat(request: Request, db_pool=Depends(get_db_pool)):
+async def chat(request: Request, sid: str = Depends(get_session_id), db_pool=Depends(get_db_pool)):
     try:
         data = await request.json()
         user_message = data.get("message", "").strip()
-        session = request.session
-        sid = session.get('id', 'default')
 
         if not user_message:
             return JSONResponse(
@@ -48,7 +47,7 @@ async def chat(request: Request, db_pool=Depends(get_db_pool)):
 
         def do_request():
             response = openai.chat.completions.create(
-                model="google/gemini-2.0-flash-001",
+                model="gpt-4.1",
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
