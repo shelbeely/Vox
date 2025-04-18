@@ -1,20 +1,17 @@
 from vox.fastapi_app import get_socketio, get_db_pool, app
 from vox.database import save_vocal_data_async, update_recording_path_async
+from vox.user import get_session_id
 import numpy as np
 import asyncio
 import json
 from flask import session
 
 @socketio.on('start_recording')
-def handle_start_recording():
-    sid = session.get('id', 'default')
-    logger.info(f"Session {sid} - Starting recording")
+def handle_start_recording(sid: str = Depends(get_session_id)):
     socketio.emit('recording_status', {'status': 'started', 'message': 'Recording started'}, room=sid)
 
 @socketio.on('stop_recording')
-def handle_stop_recording():
-    sid = session.get('id', 'default')
-    logger.info(f"Session {sid} - Stopping recording")
+def handle_stop_recording(sid: str = Depends(get_session_id)):
     socketio.emit('recording_status', {'status': 'stopped', 'message': 'Recording stopped'}, room=sid)
 
     async def generate_and_emit_feedback():
@@ -94,8 +91,7 @@ Provide personalized, supportive feedback on the user's voice based on these met
 
 
 @socketio.on('raw_audio')
-def handle_raw_audio(data):
-    sid = session.get('id', 'default')
+def handle_raw_audio(data, sid: str = Depends(get_session_id)):
     audio = np.array(data['audio'], dtype=np.float32)
     timestamp = data['timestamp']
 
@@ -151,9 +147,7 @@ def handle_raw_audio(data):
 
 
 @socketio.on('save_recording')
-def handle_save_recording_socket(data):
-    sid = session.get('id', 'default')
-    timestamp = data['timestamp']
+def handle_save_recording_socket(data, sid: str = Depends(get_session_id)):
     recording_path = data['recording_path']
 
     db_pool = get_db_pool()
@@ -178,8 +172,7 @@ from vox.llm import chat_with_llm
 from vox.utils import LLM_PERSONALITY_PROMPT_BASE
 
 @socketio.on('chat_message')
-def handle_chat_message(data):
-    sid = session.get('id', 'default')
+def handle_chat_message(data, sid: str = Depends(get_session_id)):
     db_pool = get_db_pool()
     logger = getattr(app.state, "logger", None)
     user_message = data.get('message', '').strip()
