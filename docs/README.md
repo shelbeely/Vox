@@ -92,7 +92,7 @@ Licensed under GPL-3.0 — share the love, keep it open!
 - **Python 3.8+**
 - **Node.js (for frontend development, optional)**
 - **pip packages:**  
-  `flask flask-socketio flask-wtf flask-limiter requests numpy librosa aubio`
+  `flask flask-socketio flask-wtf flask-limiter requests numpy librosa aubio gunicorn eventlet`
 
 ### Environment Variables
 
@@ -113,13 +113,13 @@ cd vox/0.1.3
 2. **Install Python dependencies**
 
 ```bash
-pip install flask flask-socketio flask-wtf flask-limiter requests numpy librosa aubio
+pip install flask flask-socketio flask-wtf flask-limiter requests numpy librosa aubio gunicorn eventlet
 ```
 
-3. **Run the Flask app**
+3. **Run the app with Gunicorn + eventlet**
 
 ```bash
-python app.py
+gunicorn --worker-class eventlet -w 1 app:app
 ```
 
 4. **Access Vox**

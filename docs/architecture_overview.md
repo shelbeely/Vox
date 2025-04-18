@@ -1,133 +1,73 @@
-# Vox 0.1.3 - Architecture Overview
+# Vox Modular Architecture Overview
 
----
+## Entry Point
 
-## High-Level Description
+- **`main.py`**  
+  Starts the app by importing `app` and `socketio` from the package and running the server.
 
-Vox is a Flask + Socket.IO web app designed as a voice therapy coach for trans individuals. It uses asyncpg to connect to a Supabase PostgreSQL database, OpenAI's GPT models for personalized feedback, and real-time audio analysis with `librosa` and `aubio`. It supports user sessions, saving recordings, analyzing voice features, and providing affirming AI chat.
+## Package Structure (`app/`)
 
----
-
-## Main Components
-
-### 1. Flask App with Async Endpoints
-- `/` (index): initializes user session, fetches or creates user info, serves homepage.
-- `/set_target_gender`: saves user's target gender.
-- `/set_user_info`: saves user's name and pronouns.
-- `/get_performances`: fetches user's past recordings and analysis.
-- `/save_recording`: uploads and stores a new voice recording.
-- `/clear_history`: deletes all user's recordings and data.
-- `/chat`: sends user message to OpenAI for affirming chat.
-
-### 2. Socket.IO Events
-- `start_recording` / `stop_recording`: manage recording state, trigger feedback generation.
-- `raw_audio`: receives live audio chunks, performs pitch, HNR, harmonics, formants analysis, emits real-time feedback.
-- `save_recording`: links saved file path to latest vocal data.
-
-### 3. Database (Supabase PostgreSQL)
-- `users` table: session_id, user_name, user_pronouns, target_gender.
-- `vocal_data` table: session_id, timestamp, pitch, hnr, harmonics, formants, recording_path.
-
-### 4. Audio Analysis
-- **Pitch detection:** aubio's YIN algorithm.
-- **HNR:** librosa.
-- **Formants:** LPC analysis.
-- **Harmonics:** spectral peak extraction.
-
-### 5. AI Feedback
-- Uses Google Gemini 2.0 Flash.
-- Custom prompt with user's name, pronouns, vocal metrics.
-- Generates warm, affirming, personalized feedback.
-
----
-
-## Diagrams
-
-### Overall System Flow
-
-```mermaid
-flowchart TD
-    subgraph Client
-        A1[User visits site] --> A2[Records voice]
-        A2 --> A3[Uploads recording / streams audio]
-        A3 --> A4[Receives real-time feedback]
-        A4 --> A5[Views past performances]
-        A4 --> A6[Chats with AI]
-    end
-
-    subgraph Server
-        B1[Flask async app]
-        B2[Socket.IO server]
-        B3[Supabase PostgreSQL]
-        B4[OpenAI API]
-        B5[Audio Analysis (librosa, aubio)]
-    end
-
-    A1 -->|HTTP| B1
-    A2 -->|Socket.IO| B2
-    A3 -->|Socket.IO| B2
-    A4 -->|Socket.IO| B2
-    A5 -->|HTTP| B1
-    A6 -->|HTTP| B1
-
-    B1 -->|asyncpg| B3
-    B2 -->|asyncpg| B3
-    B2 --> B5
-    B2 -->|OpenAI| B4
-    B1 -->|OpenAI| B4
+```
+app/
+├── __init__.py          # Initializes Flask app, SocketIO, CSRF, Limiter, DB pool, registers Blueprints
+├── main.py              # Home page route
+├── user.py              # User info, target gender, profile, performances
+├── auth.py              # Registration, login, email verification, password reset, Discord OAuth
+├── recordings.py        # Save recordings, clear history, convert recordings
+├── chat.py              # Chat endpoint with LLM
+├── socket_handlers.py   # SocketIO event handlers (start/stop recording, audio stream, save recording)
+├── audio_processing.py  # Audio feature extraction (pitch, formants, HNR, jitter/shimmer, harmonics)
+├── database.py          # Async database helper functions
+├── utils.py             # Utility functions, constants, pronoun examples, cleanup
+├── llm.py               # LLM prompt construction and OpenAI API calls
 ```
 
----
+## Blueprints
 
-### Socket.IO Real-Time Feedback Loop
+- **`main_bp`**: `/` (home page)
+- **`user_bp`**: `/user` (user info, profile, performances)
+- **`auth_bp`**: `/auth` (registration, login, OAuth)
+- **`recordings_bp`**: `/recordings` (save, clear, convert recordings)
+- **`chat_bp`**: `/chat` (chat endpoint)
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant SocketServer as Socket.IO Server
-    participant Audio as Audio Analysis
-    participant DB as Supabase DB
-    participant GPT as OpenAI GPT
+Registered in `app/__init__.py`.
 
-    User->>SocketServer: start_recording
-    User->>SocketServer: raw_audio (stream chunks)
-    SocketServer->>Audio: Analyze pitch, HNR, harmonics, formants
-    Audio-->>SocketServer: Analysis results
-    SocketServer->>DB: save_vocal_data_async
-    SocketServer->>User: Emit audio_analysis + history_update
+## SocketIO Events
 
-    User->>SocketServer: stop_recording
-    SocketServer->>DB: Fetch latest vocal data
-    SocketServer->>DB: Fetch user info
-    SocketServer->>GPT: Generate feedback prompt
-    GPT-->>SocketServer: Feedback text
-    SocketServer->>User: Emit llm_feedback
-```
+- `start_recording`
+- `stop_recording`
+- `raw_audio`
+- `save_recording`
 
----
+Handlers in `app/socket_handlers.py`.
 
-### Database Schema (Simplified)
+## Constants & Config
 
-```mermaid
-erDiagram
-    USERS {
-        UUID session_id PK
-        TEXT user_name
-        TEXT user_pronouns
-        TEXT target_gender
-    }
-    VOCAL_DATA {
-        UUID session_id FK
-        TIMESTAMP timestamp
-        FLOAT pitch
-        FLOAT hnr
-        JSON harmonics
-        JSON formants
-        TEXT recording_path
-    }
-    USERS ||--o{ VOCAL_DATA : has
-```
+- **`LLM_PERSONALITY_PROMPT_BASE`**: in `app/utils.py`
+- **`PRONOUN_EXAMPLES`**: in `app/utils.py`
+- **Folders**: `uploads/`, `recordings/`
+- **API keys**: via environment variables
+- **Database URL**: via environment variable
+
+## Database
+
+- Supabase PostgreSQL via `asyncpg`
+- Connection pool initialized in `app/__init__.py`
+- Helpers in `app/database.py`
+
+## LLM Integration
+
+- OpenAI API (via OpenRouter)
+- Functions in `app/llm.py`
+- Used in chat and feedback generation
+
+## Deprecated
+
+- **`app.py`**:  
+  Monolithic legacy file, now deprecated.  
+  **Do not edit.**  
+  Will be removed in the future.
 
 ---
 
-*Generated on 2025-04-06*
+_Last updated: April 9, 2025_

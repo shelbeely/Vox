@@ -1,10 +1,15 @@
-requests
+ requests
 numpy
 librosa
 aubio
-flask
-flask_limiter
-flask_socketio
-flask_wtf
+praat-parselmouth
 asyncpg
-openai
+openai>=1.0.0
+fastapi
+hypercorn
+python-socketio[asgi]
+starlette
+jinja2
+python-multipart
+slowapi
+python-dotenv

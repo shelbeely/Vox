@@ -315,7 +315,11 @@ async function saveAndStopRecording() {
         formData.append('recording', recordingBlob, 'recording.wav');
         formData.append('timestamp', new Date().toISOString());
 
-        fetch('/save_recording', {
+        // Add gender transform checkbox state
+        const applyGenderTransform = document.getElementById('applyGenderTransformCheckbox')?.checked ? 'true' : 'false';
+        formData.append('apply_gender_transform', applyGenderTransform);
+
+        fetch('/recordings/save_recording', {
             method: 'POST',
             body: formData
         })
@@ -325,6 +329,7 @@ async function saveAndStopRecording() {
                 socket.emit('save_recording', {
                     timestamp: formData.get('timestamp'),
                     recording_path: data.recording_path,
+                    transformed_path: data.transformed_path,
                     pitch: pitchChart.data.datasets[0].data.slice(-1)[0] || 0,
                     hnr: hnrChart.data.datasets[0].data.slice(-1)[0] || 0,
                     harmonics: JSON.parse(document.getElementById("historyList").firstChild?.dataset.harmonics || '[]'),
@@ -395,10 +400,16 @@ socket.on("audio_analysis", (data) => {
 socket.on("history_update", (data) => {
     const listItem = document.createElement("li");
     const timestamp = new Date(data.timestamp).toLocaleString();
+    let audioPath = data.recording_path;
+    let transformedPath = data.transformed_path;
+
     listItem.innerHTML = `
+        <input type="checkbox" class="convert-checkbox" data-path="${audioPath}">
         <span class="material-icons">history</span> 
         ${timestamp}: Pitch=${data.pitch.toFixed(2)} Hz, HNR=${data.hnr.toFixed(2)} dB, Harmonics=${data.harmonics.length}, Formants=${data.formants.map(f => `${f.freq.toFixed(0)} Hz`).join(', ')}
-        ${data.recording_path ? `<button class="media-button" onclick="playRecording('${data.recording_path}')" aria-label="Play Recording"><span class="material-icons">play_arrow</span></button>` : ''}
+        ${audioPath ? `<button class="media-button" onclick="playRecording('${audioPath}')" aria-label="Play Recording"><span class="material-icons">play_arrow</span></button>` : ''}
+        ${transformedPath ? `<button class="media-button" onclick="playRecording('${transformedPath}')" aria-label="Play Transformed"><span class="material-icons">auto_fix_high</span></button>` : ''}
+        ${transformedPath ? `<div style="font-size: 0.9em; color: #ccc; margin-top: 4px;">This modified recording is just an example of how certain voice features might align with your gender goals. Every trans person's voice is unique, valid, and beautiful in its own way. Your authentic voice is yours alone, and no example defines your worth or progress.</div>` : ''}
     `;
     listItem.dataset.harmonics = JSON.stringify(data.harmonics);
     listItem.dataset.formants = JSON.stringify(data.formants);
@@ -436,7 +447,7 @@ socket.on("recording_status", (data) => {
     }
 });
 
-fetch('/get_performances')
+fetch('/user/get_performances')
     .then(response => response.json())
     .then(data => {
         data.forEach(performance => {
@@ -458,7 +469,7 @@ fetch('/get_performances')
     });
 
 function clearHistory() {
-    fetch('/clear_history', { method: 'POST' })
+    fetch('/recordings/clear_history', { method: 'POST' })
         .then(response => response.json())
         .then(data => {
             if (data.status !== "success") showError('Failed to clear history.');
@@ -474,7 +485,7 @@ function updateUserInfo() {
     const userPronouns = document.getElementById("userPronouns").value;
     const targetGender = document.getElementById("targetGender").value;
     if (userName) {
-        fetch('/set_user_info', {
+        fetch('/user/set_user_info', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: userName, pronouns: userPronouns })
@@ -521,7 +532,7 @@ function editUserInfo() {
 }
 
 function updateTargetGender(targetGender) {
-    fetch('/set_target_gender', {
+    fetch('/user/set_target_gender', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ target: targetGender })
@@ -599,8 +610,146 @@ document.getElementById("startTargetButton").addEventListener("click", () => {
 document.getElementById("stopTargetButton").addEventListener("click", stopTargetPitch);
 document.getElementById("targetGender").addEventListener("change", () => updateTargetGender(document.getElementById("targetGender").value));
 
+document.getElementById("convertSelectedButton").addEventListener("click", async () => {
+    const checkboxes = document.querySelectorAll(".convert-checkbox:checked");
+    const paths = Array.from(checkboxes).map(cb => cb.dataset.path);
+    if (paths.length === 0) {
+        alert("Please select at least one recording to convert.");
+        return;
+    }
+    try {
+        const response = await fetch('/recordings/convert_recordings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths })
+        });
+        const result = await response.json();
+        if (result.status === "success") {
+            alert("Selected recordings converted successfully!");
+            location.reload();
+        } else {
+            alert("Conversion failed: " + (result.message || "Unknown error"));
+        }
+    } catch (error) {
+        console.error("Error converting recordings:", error);
+        alert("Error converting recordings.");
+    }
+});
+
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && document.activeElement === document.getElementById("chatInput")) sendChat();
     if (e.key === 'r' && !isRecording) startRecording();
     if (e.key === 's' && isRecording) stopRecording();
 });
+
+// --- Auth & Profile Logic ---
+
+const authModal = document.getElementById('authModal');
+const resetModal = document.getElementById('resetModal');
+const profileModal = document.getElementById('profileModal');
+
+document.getElementById('authButton').onclick = () => authModal.style.display = 'block';
+document.getElementById('profileButton').onclick = fetchProfile;
+
+function closeAuthModal() { authModal.style.display = 'none'; }
+function closeResetModal() { resetModal.style.display = 'none'; }
+function closeProfileModal() { profileModal.style.display = 'none'; }
+
+document.getElementById('registerButton').onclick = async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value.trim();
+    const name = document.getElementById('authName').value.trim();
+    const pronouns = document.getElementById('authPronouns').value.trim();
+    const res = await fetch('/auth/register', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({email, password, name, pronouns})
+    });
+    const data = await res.json();
+    alert(data.message);
+    if(data.status==='success') closeAuthModal();
+};
+
+document.getElementById('loginButton').onclick = async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value.trim();
+    const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({email, password})
+    });
+    const data = await res.json();
+    alert(data.message);
+    if(data.status==='success'){
+        closeAuthModal();
+        document.getElementById('authButton').style.display='none';
+        document.getElementById('profileButton').style.display='inline-block';
+    }
+};
+
+document.getElementById('forgotPasswordLink').onclick = (e) => {
+    e.preventDefault();
+    closeAuthModal();
+    resetModal.style.display='block';
+};
+
+document.getElementById('requestResetButton').onclick = async () => {
+    const email = document.getElementById('resetEmail').value.trim();
+    const res = await fetch('/auth/request_password_reset', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({email})
+    });
+    const data = await res.json();
+    alert(data.message);
+};
+
+document.getElementById('submitResetButton').onclick = async () => {
+    const token = document.getElementById('resetToken').value.trim();
+    const password = document.getElementById('newPassword').value.trim();
+    const res = await fetch('/auth/reset_password', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({token, password})
+    });
+    const data = await res.json();
+    alert(data.message);
+    if(data.status==='success') closeResetModal();
+};
+
+async function fetchProfile(){
+    const res = await fetch('/user/profile');
+    const data = await res.json();
+    if(data.status==='success'){
+        const info = `
+Email: ${data.email || 'Not linked'} (${data.email_verified ? 'Verified' : 'Unverified'})<br>
+Discord: ${data.discord_id || 'Not linked'}<br>
+Name: ${data.user_name}<br>
+Pronouns: ${data.user_pronouns}<br>
+`;
+        document.getElementById('profileInfo').innerHTML = info;
+        profileModal.style.display='block';
+        document.getElementById('authButton').style.display='none';
+        document.getElementById('profileButton').style.display='inline-block';
+    } else {
+        alert(data.message);
+    }
+}
+
+document.getElementById('resendVerificationButton').onclick = async () => {
+    const res = await fetch('/auth/register', {method:'POST'}); // Placeholder, should be a dedicated resend endpoint
+    const data = await res.json();
+    alert(data.message);
+};
+
+document.getElementById('linkDiscordButton').onclick = async () => {
+    alert('Discord linking not implemented yet');
+};
+
+document.getElementById('unlinkDiscordButton').onclick = async () => {
+    alert('Discord unlinking not implemented yet');
+};
+
+document.getElementById('discordLoginButton').onclick = async () => {
+    alert('Discord login not implemented yet');
+};

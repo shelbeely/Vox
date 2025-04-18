@@ -185,10 +185,10 @@ Licensed under GPL-3.0 — share the love, keep it open!</p>
 <h3>Setup & Installation</h3>
 <ul>
 <li>Python 3.8+, Node.js (optional)</li>
-<li><code>pip install flask flask-socketio flask-wtf flask-limiter requests numpy librosa aubio</code></li>
-<li>Set <code>FLASK_SECRET_KEY</code> and <code>OPENROUTER_API_KEY</code></li>
-<li>Run: <code>python app.py</code></li>
-<li>Access: <a href="http://localhost:5000">http://localhost:5000</a></li>
+<li><code>pip install fastapi uvicorn slowapi requests numpy librosa aubio asyncpg jinja2</code></li>
+<li>Set <code>FASTAPI_SECRET_KEY</code> and <code>OPENROUTER_API_KEY</code></li>
+<li>Run: <code>hypercorn vox.fastapi_app:app --bind 0.0.0.0:3000</code></li>
+<li>Access: <a href="http://localhost:8000">http://localhost:8000</a></li>
 </ul>
 
 <h3>Usage Guide</h3>
@@ -278,14 +278,14 @@ Licensed under GPL-3.0 — share the love, keep it open!</p>
 <!-- Web Layer -->
 <rect x="300" y="150" width="200" height="300" rx="16" ry="16" fill="#c8e6c9" stroke="#34a853" stroke-width="2" filter="url(#md3-shadow)" />
 <text x="400" y="175" font-size="14" text-anchor="middle" font-weight="bold" fill="#1a1c1e">Web Server</text>
-<text x="400" y="200" font-size="12" text-anchor="middle" fill="#1a1c1e">Flask + Socket.IO</text>
+<text x="400" y="200" font-size="12" text-anchor="middle" fill="#1a1c1e">FastAPI + ASGI</text>
 <!-- Processing -->
 <rect x="550" y="100" width="250" height="400" rx="16" ry="16" fill="#fff9c4" stroke="#fbbc04" stroke-width="2" filter="url(#md3-shadow)" />
 <text x="675" y="125" font-size="14" text-anchor="middle" font-weight="bold" fill="#1a1c1e">Processing</text>
 <text x="675" y="155" font-size="12" text-anchor="middle" fill="#1a1c1e">Audio Analysis</text>
 <text x="675" y="175" font-size="10" text-anchor="middle" fill="#1a1c1e">librosa, aubio</text>
 <text x="675" y="205" font-size="12" text-anchor="middle" fill="#1a1c1e">AI Feedback</text>
-<text x="675" y="225" font-size="10" text-anchor="middle" fill="#1a1c1e">Gemini 2.0 Flash</text>
+<text x="675" y="225" font-size="10" text-anchor="middle" fill="#1a1c1e">OpenRouter/OpenAI</text>
 <text x="675" y="255" font-size="12" text-anchor="middle" fill="#1a1c1e">Chatbot</text>
 <text x="675" y="275" font-size="10" text-anchor="middle" fill="#1a1c1e">OpenAI GPT</text>
 <!-- Database -->
@@ -326,7 +326,7 @@ Licensed under GPL-3.0 — share the love, keep it open!</p>
 <text x="125" y="155" font-size="10" text-anchor="middle" fill="#1a1c1e">Audio + Metadata</text>
 <rect x="250" y="100" width="150" height="120" rx="12" ry="12" fill="#c8e6c9" stroke="#34a853" stroke-width="2" filter="url(#md3-shadow)" />
 <text x="325" y="125" font-size="12" text-anchor="middle" font-weight="bold" fill="#1a1c1e">Web Server</text>
-<text x="325" y="155" font-size="10" text-anchor="middle" fill="#1a1c1e">Flask + Socket.IO</text>
+<text x="325" y="155" font-size="10" text-anchor="middle" fill="#1a1c1e">FastAPI + ASGI</text>
 <rect x="450" y="100" width="150" height="120" rx="12" ry="12" fill="#fff9c4" stroke="#fbbc04" stroke-width="2" filter="url(#md3-shadow)" />
 <text x="525" y="125" font-size="12" text-anchor="middle" font-weight="bold" fill="#1a1c1e">Processing</text>
 <text x="525" y="155" font-size="10" text-anchor="middle" fill="#1a1c1e">Analysis + AI</text>
@@ -400,7 +400,7 @@ Licensed under GPL-3.0 — share the love, keep it open!</p>
 <text x="400" y="75" font-size="12" text-anchor="middle" font-weight="bold" fill="#1a1c1e">Prompt Builder</text>
 <text x="400" y="95" font-size="10" text-anchor="middle" fill="#1a1c1e">User info + Metrics</text>
 <rect x="550" y="50" width="200" height="100" rx="12" ry="12" fill="#c8e6c9" stroke="#34a853" stroke-width="2" filter="url(#md3-shadow)" />
-<text x="650" y="75" font-size="12" text-anchor="middle" font-weight="bold" fill="#1a1c1e">Gemini 2.0 Flash</text>
+<text x="650" y="75" font-size="12" text-anchor="middle" font-weight="bold" fill="#1a1c1e">OpenRouter/OpenAI</text>
 <text x="650" y="95" font-size="10" text-anchor="middle" fill="#1a1c1e">Generate Feedback</text>
 <rect x="800" y="50" width="150" height="100" rx="12" ry="12" fill="#bbdefb" stroke="#1a73e8" stroke-width="2" filter="url(#md3-shadow)" />
 <text x="875" y="75" font-size="12" text-anchor="middle" font-weight="bold" fill="#1a1c1e">Client</text>
