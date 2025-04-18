@@ -51,18 +51,18 @@ async def handle_stop_recording(sid, data=None):
                 user_pronouns = user['user_pronouns'] if user and user['user_pronouns'] else 'they/them/theirs/themselves'
 
                 prompt = LLM_PERSONALITY_PROMPT_BASE + f"""
-User info:
-Name: {user_name}
-Pronouns: {user_pronouns}
-
-Latest vocal metrics:
-- Pitch: {pitch:.2f} Hz
-- Harmonics-to-Noise Ratio (HNR): {hnr:.2f}
-- Harmonics: {harmonics}
-- Formants: {formants}
-
-Provide personalized, supportive feedback on the user's voice based on these metrics. Be encouraging and offer practical tips if appropriate.
-"""
+                    User info:
+                    Name: {user_name}
+                    Pronouns: {user_pronouns}
+                    
+                    Latest vocal metrics:
+                    - Pitch: {pitch:.2f} Hz
+                    - Harmonics-to-Noise Ratio (HNR): {hnr:.2f}
+                    - Harmonics: {harmonics}
+                    - Formants: {formants}
+                    
+                    Provide personalized, supportive feedback on the user's voice based on these metrics. Be encouraging and offer practical tips if appropriate.
+                    """
 
                 import openai
                 import os
