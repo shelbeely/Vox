@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi import Limiter
+from vox.user import get_session_id
 import typing as _t
 import os
 from datetime import datetime
@@ -16,17 +17,11 @@ router = APIRouter()
 @limiter.limit("50/hour")
 async def save_recording(
     request: Request,
+    sid: str = Depends(get_session_id),
     recording: UploadFile = File(...),
     timestamp: str = Form(None),
     apply_gender_transform: str = Form("false")
 ):
-    session = request.session
-    sid = session.get("id", "default")
-    pool = request.app.state.db_pool
-    # Look up user_id from session
-    async with pool.acquire() as conn:
-        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-        user_id = session_row["user_id"] if session_row else None
     if not recording:
         return JSONResponse({"status": "error", "message": "No recording file provided"}, status_code=400)
 
@@ -61,18 +56,18 @@ async def save_recording(
             logging.error(f"Gender transform error: {e}")
             transformed_filepath = None
 
-    # Insert vocal_data with user_id and session_id
+    pool = request.app.state.db_pool
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO vocal_data (user_id, session_id, timestamp, pitch, hnr, harmonics, formants, recording_path) "
-            "VALUES ($1, $2, $3, NULL, NULL, NULL, NULL, $4)",
-            user_id, sid, timestamp, filepath
+            "INSERT INTO vocal_data (session_id, timestamp, pitch, hnr, harmonics, formants, recording_path) "
+            "VALUES ($1, $2, NULL, NULL, NULL, NULL, $3)",
+            sid, timestamp, filepath
         )
         if transformed_filepath:
             try:
                 await conn.execute(
-                    "UPDATE vocal_data SET transformed_path = $1 WHERE user_id = $2 AND session_id = $3 AND timestamp = $4",
-                    transformed_filepath, user_id, sid, timestamp
+                    "UPDATE vocal_data SET transformed_path = $1 WHERE session_id = $2 AND timestamp = $3",
+                    transformed_filepath, sid, timestamp
                 )
             except Exception:
                 pass
@@ -88,9 +83,7 @@ async def save_recording(
 
 @router.post("/clear_history")
 @limiter.limit("50/hour")
-async def clear_history(request: Request):
-    session = request.session
-    sid = session.get("id", "default")
+async def clear_history(request: Request, sid: str = Depends(get_session_id)):
 
     pool = request.app.state.db_pool
     async with pool.acquire() as conn:
@@ -127,9 +120,7 @@ async def clear_history(request: Request):
 
 @router.post("/convert_recordings")
 @limiter.limit("50/hour")
-async def convert_recordings(request: Request):
-    session = request.session
-    sid = session.get("id", "default")
+async def convert_recordings(request: Request, sid: str = Depends(get_session_id)):
     data = await request.json()
     paths = data.get("paths", [])
 
