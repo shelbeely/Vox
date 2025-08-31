@@ -94,3 +94,22 @@ Vox is built to empower you. If you have questions or ideas, reach out to the de
 
 With love and pride,  
 **Vox Team**
+
+---
+
+For Developers: Manually Adding a User
+--------------------------------------
+
+If you need to add a user directly to the database, you must hash the password using `bcrypt`. Plain text passwords will not work.
+
+You can use this Python script to generate a password hash:
+
+```python
+import bcrypt
+
+password = b"the_password_you_want_to_hash"
+hashed = bcrypt.hashpw(password, bcrypt.gensalt())
+print(hashed.decode())
+```
+
+Run this script and copy the output into the `password_hash` column of the `users` table in your database. You will also need to provide an `email`, `user_name`, and `user_pronouns`. The `email_verified` column should be set to `TRUE` if you want to bypass email verification for this user.

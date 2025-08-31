@@ -19,6 +19,16 @@ function getCookie(name) {
     return null;
 }
 
+function setCookie(name, value, days) {
+    let expires = "";
+    if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days*24*60*60*1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+}
+
 // Grab your unique session ID, or use 'default' if none found
 const sessionId = getCookie('session_id') || 'default';
 
@@ -677,9 +687,11 @@ document.getElementById('loginButton').onclick = async () => {
     const data = await res.json();
     alert(data.message);
     if(data.status==='success'){
+        setCookie('session_id', data.session_id, 7); // Set cookie for 7 days
         closeAuthModal();
         document.getElementById('authButton').style.display='none';
         document.getElementById('profileButton').style.display='inline-block';
+        location.reload(); // Reload the page to apply the new session
     }
 };
 

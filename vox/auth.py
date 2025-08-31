@@ -125,6 +125,10 @@ async def login(request: Request, db_pool=Depends(get_db_pool)):
         session_id = str(uuid.uuid4())
         await create_session(db_pool, session_id, user_id=user['user_id'])
 
+        # Store session_id in the session middleware
+        request.session['session_id'] = session_id
+        request.session['user_id'] = user['user_id']
+
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={'status': 'success', 'message': 'Logged in', 'session_id': session_id}
