@@ -178,15 +178,12 @@ Create a `.env` file in the root directory or set environment variables:
 ## Developer Notes
 
 - Designed with trans inclusivity and accessibility at its core.
-- Modular codebase:  
-  - `app.py` — backend server, API, audio analysis, LLM integration  
-  - `index.html` — UI layout  
-  - `scripts.js` — client logic, audio capture, visualization  
-  - `styles.css` — styling and animations
-- Real-time audio analysis combines browser-side (Tone.js) and server-side (librosa, aubio) processing.
+- The backend is a modular FastAPI application located in the `vox/` directory. See `docs/architecture_overview.md` for a detailed breakdown.
+- The frontend consists of HTML templates in `templates/`, JavaScript in `static/scripts.js`, and CSS in `static/styles.css`.
+- Real-time audio analysis combines browser-side (Tone.js) and server-side (parselmouth, aubio) processing.
 - LLM prompts are carefully crafted to respect pronouns and uplift users.
-- Cleans up old recordings after ~40 days to save space.
-- Contributions welcome! Please respect the GPL license and trans-affirming mission.
+- A background task cleans up old recordings to save space.
+- Contributions are welcome! Please respect the GPL license and the trans-affirming mission of the project.
 
 ---
 
