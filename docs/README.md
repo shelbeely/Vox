@@ -62,16 +62,15 @@ Licensed under GPL-3.0 — share the love, keep it open!
 
 ### Architecture Overview
 
-- **Backend:**  
-  - Python Flask app (`app.py`) serving REST API and Socket.IO for real-time communication.  
-  - Uses `librosa` and `aubio` for audio analysis (pitch, harmonics, formants).  
-  - Stores user info and vocal data in SQLite (`vocal_data.db`).  
-  - Connects to OpenRouter API for LLM-powered feedback and chat.
-
-- **Frontend:**  
-  - HTML5 interface (`index.html`) with accessible controls and visualizations.  
-  - JavaScript (`scripts.js`) handles audio capture, visualization, Socket.IO events, and API calls.  
-  - Styled with CSS (`styles.css`), including responsive design and animations.
+- **Backend:**
+    - Python FastAPI app (`vox/fastapi_app.py`) serving a REST API and using Socket.IO for real-time communication.
+    - Uses `librosa`, `aubio`, and `parselmouth` for audio analysis (pitch, HNR, harmonics, formants).
+    - Stores user info and vocal data in a PostgreSQL database (hosted on Supabase).
+    - Connects to OpenRouter API for LLM-powered feedback and chat.
+- **Frontend:**
+    - HTML5 interface (`templates/index.html`) with accessible controls and visualizations.
+    - JavaScript (`static/scripts.js`) handles audio capture, visualization, Socket.IO events, and API calls.
+    - Styled with CSS (`static/styles.css`), including responsive design and animations.
 
 ### Data Flow
 
@@ -90,41 +89,42 @@ Licensed under GPL-3.0 — share the love, keep it open!
 ### Prerequisites
 
 - **Python 3.8+**
-- **Node.js (for frontend development, optional)**
-- **pip packages:**  
-  `flask flask-socketio flask-wtf flask-limiter requests numpy librosa aubio gunicorn eventlet`
+- **pip packages:** See `requirements.txt`
 
 ### Environment Variables
 
-Create a `.env` file or set environment variables:
+Create a `.env` file in the root directory or set environment variables:
 
-- `FLASK_SECRET_KEY` — secret key for Flask sessions
+- `FASTAPI_SECRET_KEY` — secret key for FastAPI sessions
+- `SUPABASE_DB_URL` — your Supabase PostgreSQL connection string
 - `OPENROUTER_API_KEY` — your OpenRouter API key for LLM access
+- `DISCORD_CLIENT_ID` (optional) — for Discord authentication
+- `DISCORD_CLIENT_SECRET` (optional) — for Discord authentication
+- `DISCORD_REDIRECT_URI` (optional) — for Discord authentication
 
 ### Installation Steps
 
 1. **Clone the repository**
-
-```bash
-git clone https://github.com/shelbeely/vox.git
-cd vox/0.1.3
-```
-
+    ```bash
+    git clone https://github.com/shelbeely/vox.git
+    cd vox
+    ```
 2. **Install Python dependencies**
-
-```bash
-pip install flask flask-socketio flask-wtf flask-limiter requests numpy librosa aubio gunicorn eventlet
-```
-
-3. **Run the app with Gunicorn + eventlet**
-
-```bash
-gunicorn --worker-class eventlet -w 1 app:app
-```
-
-4. **Access Vox**
-
-Open your browser and navigate to `http://localhost:5000`
+    ```bash
+    pip install -r requirements.txt
+    ```
+3. **Set up the database**
+    - Make sure your `SUPABASE_DB_URL` is correctly set in your `.env` file.
+    - Run the database initialization script:
+        ```bash
+        python init_db.py
+        ```
+4. **Run the app with Hypercorn**
+    ```bash
+    hypercorn vox.fastapi_app:sio_app --bind 0.0.0.0:3000
+    ```
+5. **Access Vox**
+    Open your browser and navigate to `http://localhost:3000`
 
 ---
 
@@ -167,10 +167,10 @@ Open your browser and navigate to `http://localhost:5000`
 
 ## Technologies Used
 
-- **Backend:** Python, Flask, Flask-SocketIO, SQLite, librosa, aubio, requests
+- **Backend:** Python, FastAPI, python-socketio, PostgreSQL (Supabase), asyncpg, librosa, aubio, parselmouth
 - **Frontend:** HTML5, CSS3, JavaScript, Socket.IO, Tone.js, Chart.js, JustGage, Raphael
-- **AI Integration:** OpenRouter API with DeepSeek Chat model
-- **Security:** Flask-WTF CSRF, Flask-Limiter rate limiting
+- **AI Integration:** OpenRouter API
+- **Security:** slowapi for rate limiting
 - **License:** GPL-3.0
 
 ---

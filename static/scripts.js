@@ -361,9 +361,8 @@ socket.on('connect_error', (error) => {
 });
 
 socket.on("audio_analysis", (data) => {
+    const { pitch, hnr, harmonics, formants } = data;
     const now = new Date().toLocaleTimeString();
-    const harmonics = data.harmonics;
-    const formants = data.formants;
     const stability = calculatePitchStability(pitch);
 
     const display = document.getElementById("pitchDisplay");
@@ -446,8 +445,6 @@ socket.on("chat_response", (data) => {
         output.appendChild(assistantDiv);
     }
     output.scrollTop = output.scrollHeight;
-    listItem.innerHTML = `<span class="material-icons">chat</span> Vox: ${data.message}`;
-    document.getElementById("llmOutput").prepend(listItem);
 });
 
 socket.on("recording_status", (data) => {
@@ -733,7 +730,16 @@ Pronouns: ${data.user_pronouns}<br>
 }
 
 document.getElementById('resendVerificationButton').onclick = async () => {
-    const res = await fetch('/auth/register', {method:'POST'}); // Placeholder, should be a dedicated resend endpoint
+    const email = document.getElementById('authEmail').value.trim();
+    if (!email) {
+        alert("Please enter your email address in the email field first.");
+        return;
+    }
+    const res = await fetch('/auth/resend_verification', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ email: email })
+    });
     const data = await res.json();
     alert(data.message);
 };

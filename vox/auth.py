@@ -85,6 +85,32 @@ async def verify_email(request: Request, db_pool=Depends(get_db_pool)):
         content={'status': 'success', 'message': 'Email verified successfully'}
     )
 
+@router.post("/resend_verification", response_class=JSONResponse)
+async def resend_verification(request: Request, db_pool=Depends(get_db_pool)):
+    data = await request.json()
+    email = data.get('email', '').strip().lower()
+    if not email:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'status': 'error', 'message': 'Email required'}
+        )
+
+    async with db_pool.acquire() as conn:
+        user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
+        if user and not user['email_verified']:
+            token = secrets.token_urlsafe(32)
+            expires = datetime.utcnow() + timedelta(hours=24)
+            await conn.execute(
+                "UPDATE users SET verification_token = $1, verification_token_expires = $2 WHERE user_id = $3",
+                token, expires, user['user_id']
+            )
+            send_verification_email(email, token)
+
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={'status': 'success', 'message': 'If a matching unverified account exists, a new verification email has been sent.'}
+    )
+
 from vox.database import create_session
 import uuid
 

@@ -14,7 +14,7 @@ async def run_schema():
     if not db_url:
         print("SUPABASE_DB_URL not set in environment or .env")
         return
-    schema_path = "0.1.7/docs/supabase_schema.sql"
+    schema_path = "docs/supabase_schema.sql"
     if not os.path.exists(schema_path):
         print(f"Schema file not found: {schema_path}")
         return
