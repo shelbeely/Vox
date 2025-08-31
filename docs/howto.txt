@@ -100,16 +100,18 @@ With love and pride,
 For Developers: Manually Adding a User
 --------------------------------------
 
-If you need to add a user directly to the database, you must hash the password using `bcrypt`. Plain text passwords will not work.
+You can create a new user by running the `generate_transition_data.py` script with command-line arguments.
 
-You can use this Python script to generate a password hash:
-
-```python
-import bcrypt
-
-password = b"the_password_you_want_to_hash"
-hashed = bcrypt.hashpw(password, bcrypt.gensalt())
-print(hashed.decode())
+To create a user without generating sample data, use the `--no-data` flag:
+```bash
+python generate_transition_data.py \\
+    --email "newuser@example.com" \\
+    --password "strongpassword123" \\
+    --name "New User" \\
+    --pronouns "they/them" \\
+    --no-data
 ```
 
-Run this script and copy the output into the `password_hash` column of the `users` table in your database. You will also need to provide an `email`, `user_name`, and `user_pronouns`. The `email_verified` column should be set to `TRUE` if you want to bypass email verification for this user.
+This will create a new user with the specified details and a hashed password, and set `email_verified` to `TRUE`.
+
+If you run the script without any arguments, it will create a default user (`transition_user@example.com`) and generate a large amount of sample vocal data for that user.
