@@ -180,7 +180,7 @@ Create a `.env` file in the root directory or set environment variables:
 - Designed with trans inclusivity and accessibility at its core.
 - The backend is a modular FastAPI application located in the `vox/` directory. See `docs/architecture_overview.md` for a detailed breakdown.
 - The frontend consists of HTML templates in `templates/`, JavaScript in `static/scripts.js`, and CSS in `static/styles.css`.
-- Real-time audio analysis combines browser-side (Tone.js) and server-side (parselmouth, aubio) processing.
+- Real-time audio analysis combines browser-side (Tone.js) and server-side (librosa, parselmouth, aubio) processing.
 - LLM prompts are carefully crafted to respect pronouns and uplift users.
 - A background task cleans up old recordings to save space.
 - Contributions are welcome! Please respect the GPL license and the trans-affirming mission of the project.
