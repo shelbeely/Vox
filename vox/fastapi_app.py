@@ -46,8 +46,16 @@ app.state.db_pool = None
 async def startup_event():
     import asyncpg
     SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
-    app.state.db_pool = await asyncpg.create_pool(SUPABASE_DB_URL, max_size=10, statement_cache_size=0)
-    # Patch db_pool into routers if needed
+    if SUPABASE_DB_URL:
+        try:
+            app.state.db_pool = await asyncpg.create_pool(SUPABASE_DB_URL, max_size=10, statement_cache_size=0)
+            logger.info("Database connection pool created successfully")
+        except Exception as e:
+            logger.error(f"Failed to create database pool: {e}")
+            app.state.db_pool = None
+    else:
+        logger.warning("SUPABASE_DB_URL not set, database features will be unavailable")
+        app.state.db_pool = None
 
 # Register routers
 app.include_router(main_router)
