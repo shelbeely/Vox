@@ -39,10 +39,14 @@ async def save_recording(
     if apply_gender_transform.lower() == "true":
         pool = request.app.state.db_pool
         async with pool.acquire() as conn:
-            user_row = await conn.fetchrow(
-                "SELECT target_gender FROM users WHERE session_id = $1",
-                sid
-            )
+            # Look up user via sessions table
+            session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+            user_row = None
+            if session_row and session_row["user_id"]:
+                user_row = await conn.fetchrow(
+                    "SELECT target_gender FROM users WHERE user_id = $1",
+                    session_row["user_id"]
+                )
         target_gender = user_row["target_gender"] if user_row and user_row["target_gender"] else "unspecified"
 
         transformed_filename = filename.replace(".wav", "_gendered.wav")
@@ -129,10 +133,14 @@ async def convert_recordings(request: Request, sid: str = Depends(get_session_id
 
     pool = request.app.state.db_pool
     async with pool.acquire() as conn:
-        user_row = await conn.fetchrow(
-            "SELECT target_gender FROM users WHERE session_id = $1",
-            sid
-        )
+        # Look up user via sessions table
+        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+        user_row = None
+        if session_row and session_row["user_id"]:
+            user_row = await conn.fetchrow(
+                "SELECT target_gender FROM users WHERE user_id = $1",
+                session_row["user_id"]
+            )
     target_gender = user_row["target_gender"] if user_row and user_row["target_gender"] else "unspecified"
 
     from gender_transform import transform_audio_to_gender

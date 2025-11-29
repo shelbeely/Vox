@@ -29,8 +29,8 @@ const socket = io({ query: { sessionId: sessionId } });
 fetch('/chat/history')
     .then(response => response.json())
     .then(data => {
-        const output = document.getElementById("llmOutput");
-        if (Array.isArray(data.messages)) {
+        const output = document.getElementById("chatArea");
+        if (output && Array.isArray(data.messages)) {
             data.messages.forEach(msg => {
                 const div = document.createElement("div");
                 div.className = msg.user_role === "user" ? "user-message" : "assistant-message";
@@ -362,6 +362,8 @@ socket.on('connect_error', (error) => {
 
 socket.on("audio_analysis", (data) => {
     const now = new Date().toLocaleTimeString();
+    const pitch = data.pitch;
+    const hnr = data.hnr;
     const harmonics = data.harmonics;
     const formants = data.formants;
     const stability = calculatePitchStability(pitch);
@@ -425,29 +427,38 @@ socket.on("history_cleared", () => {
 });
 
 socket.on("llm_feedback", (data) => {
-    const listItem = document.createElement("li");
-    listItem.innerHTML = `<span class="material-icons">comment</span> Feedback (${new Date().toLocaleTimeString()}): ${data.feedback}`;
-    document.getElementById("llmOutput").prepend(listItem);
+    const output = document.getElementById("chatArea");
+    if (output) {
+        const feedbackDiv = document.createElement("div");
+        feedbackDiv.className = "assistant-message";
+        feedbackDiv.innerHTML = `<span class="material-icons">comment</span> ${data.feedback}`;
+        output.appendChild(feedbackDiv);
+        output.scrollTop = output.scrollHeight;
+    }
 });
 
 socket.on("chat_response", (data) => {
-    // data: { user_message, assistant_message }
-    const output = document.getElementById("llmOutput");
-    if (data.user_message) {
+    // data: { user_role, message }
+    const output = document.getElementById("chatArea");
+    if (data.user_role === 'user' && data.message) {
         const userDiv = document.createElement("div");
         userDiv.className = "user-message";
-        userDiv.textContent = data.user_message;
+        userDiv.textContent = data.message;
         output.appendChild(userDiv);
     }
-    if (data.assistant_message) {
+    if (data.user_role === 'assistant' && data.message) {
         const assistantDiv = document.createElement("div");
         assistantDiv.className = "assistant-message";
-        assistantDiv.textContent = data.assistant_message;
+        assistantDiv.textContent = data.message;
         output.appendChild(assistantDiv);
     }
+    if (data.user_role === 'system' && data.message) {
+        const systemDiv = document.createElement("div");
+        systemDiv.className = "system-message";
+        systemDiv.textContent = data.message;
+        output.appendChild(systemDiv);
+    }
     output.scrollTop = output.scrollHeight;
-    listItem.innerHTML = `<span class="material-icons">chat</span> Vox: ${data.message}`;
-    document.getElementById("llmOutput").prepend(listItem);
 });
 
 socket.on("recording_status", (data) => {
@@ -595,6 +606,48 @@ function hideError() {
         errorBox.classList.remove('fade-out');
     }, 300);
 }
+
+// --- Chat functionality ---
+async function sendChat() {
+    const input = document.getElementById("chatInput");
+    const message = input.value.trim();
+    if (!message) return;
+
+    // Clear input immediately
+    input.value = "";
+
+    // Show user message in chat area
+    const output = document.getElementById("chatArea");
+    const userDiv = document.createElement("div");
+    userDiv.className = "user-message";
+    userDiv.textContent = message;
+    output.appendChild(userDiv);
+    output.scrollTop = output.scrollHeight;
+
+    try {
+        const response = await fetch('/chat/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+        });
+        const data = await response.json();
+        if (data.status === "success" && data.message) {
+            const assistantDiv = document.createElement("div");
+            assistantDiv.className = "assistant-message";
+            assistantDiv.textContent = data.message;
+            output.appendChild(assistantDiv);
+            output.scrollTop = output.scrollHeight;
+        } else {
+            showError(data.message || 'Failed to get response from Vox.');
+        }
+    } catch (error) {
+        console.error('Error sending chat:', error);
+        showError('Failed to send message.');
+    }
+}
+
+document.getElementById("sendButton").addEventListener("click", sendChat);
+document.getElementById("clearHistoryButton").addEventListener("click", clearHistory);
 
 document.getElementById("recordButton").addEventListener("click", startRecording);
 document.getElementById("stopButton").addEventListener("click", stopRecording);

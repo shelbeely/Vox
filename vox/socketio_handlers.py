@@ -1,10 +1,11 @@
 import numpy as np
 import asyncio
-import json
+import os
 from vox.fastapi_app import sio, get_db_pool, get_socketio, app
 from vox.utils import LLM_PERSONALITY_PROMPT_BASE
 from vox.audio_processing import extract_pitch_parselmouth, extract_hnr_parselmouth, extract_voice_quality_parselmouth, generate_voice_report_parselmouth, extract_harmonics, extract_formants_parselmouth
 from vox.database import save_vocal_data_async, update_recording_path_async
+from vox.llm import generate_feedback
 
 logger = app.state.logger
 
@@ -42,54 +43,32 @@ async def handle_stop_recording(sid, data=None):
                 harmonics = row['harmonics']
                 formants = row['formants']
 
+                # Look up user via sessions table
                 async with db_pool.acquire() as conn:
-                    user = await conn.fetchrow(
-                        "SELECT user_name, user_pronouns FROM users WHERE session_id = $1",
-                        sid
-                    )
+                    session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
+                    user = None
+                    if session_row and session_row["user_id"]:
+                        user = await conn.fetchrow(
+                            "SELECT user_name, user_pronouns FROM users WHERE user_id = $1",
+                            session_row["user_id"]
+                        )
                 user_name = user['user_name'] if user and user['user_name'] else 'friend'
                 user_pronouns = user['user_pronouns'] if user and user['user_pronouns'] else 'they/them/theirs/themselves'
 
                 prompt = LLM_PERSONALITY_PROMPT_BASE + f"""
-                    User info:
-                    Name: {user_name}
-                    Pronouns: {user_pronouns}
-                    
-                    Latest vocal metrics:
-                    - Pitch: {pitch:.2f} Hz
-                    - Harmonics-to-Noise Ratio (HNR): {hnr:.2f}
-                    - Harmonics: {harmonics}
-                    - Formants: {formants}
-                    
-                    Provide personalized, supportive feedback on the user's voice based on these metrics. Be encouraging and offer practical tips if appropriate.
-                    """
+User info:
+Name: {user_name}
+Pronouns: {user_pronouns}
 
-                import openai
-                import os
-                from dotenv import load_dotenv
+Latest vocal metrics:
+- Pitch: {pitch:.2f} Hz
+- Harmonics-to-Noise Ratio (HNR): {hnr:.2f}
+- Harmonics: {harmonics}
+- Formants: {formants}
 
-                # Load environment variables from .env file
-                load_dotenv()
-                openai.api_base = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
-                openai.api_key = os.environ.get("OPENROUTER_API_KEY")
-
-                def do_request():
-                    response = openai.ChatCompletion.create(
-                        model="google/gemini-2.0-flash-001",
-                        messages=[
-                            {"role": "system", "content": prompt}
-                        ],
-                        temperature=0.7
-                    )
-                    return response
-
-                response_data = await asyncio.to_thread(do_request)
-
-                choices = response_data.get("choices", [])
-                if not choices:
-                    feedback_text = "No feedback generated."
-                else:
-                    feedback_text = choices[0]["message"]["content"].strip()
+Provide personalized, supportive feedback on the user's voice based on these metrics. Be encouraging and offer practical tips if appropriate.
+"""
+                feedback_text = await generate_feedback(prompt)
 
             await sio.emit('llm_feedback', {'feedback': feedback_text}, room=sid)
 
