@@ -177,7 +177,7 @@ Open your browser and navigate to `http://localhost:3000`
 - **Backend:** Python, FastAPI, python-socketio, PostgreSQL (Supabase), librosa, aubio, praat-parselmouth, requests, asyncpg, openai
 - **Frontend:** HTML5, CSS3, JavaScript, Socket.IO, Tone.js, Chart.js, JustGage, Raphael
 - **AI Integration:** OpenRouter API with Gemini 2.0 Flash model
-- **Security:** slowapi rate limiting, session middleware with itsdangerous, bcrypt password hashing
+- **Security:** CSRF protection with signed tokens, slowapi rate limiting, session middleware with itsdangerous, bcrypt password hashing
 - **License:** GPL-3.0
 
 ---
@@ -194,12 +194,13 @@ Open your browser and navigate to `http://localhost:3000`
   - `vox/auth.py` — authentication (email/password, Discord OAuth)  
   - `vox/user.py` — user profile and preferences  
   - `vox/recordings.py` — recording management  
+  - `vox/csrf.py` — CSRF protection with signed tokens  
   - `templates/index.html` — UI layout  
   - `static/scripts.js` — client logic, audio capture, visualization  
   - `static/styles.css` — styling and animations
 - Real-time audio analysis combines browser-side (Tone.js) and server-side (librosa, aubio, praat-parselmouth) processing.
 - LLM prompts are carefully crafted to respect pronouns and uplift users.
-- Cleans up old recordings after ~40 days to save space.
+- Cleans up old recordings after ~40 days to save space (automatic background task).
 - Contributions welcome! Please respect the GPL license and trans-affirming mission.
 
 ---
