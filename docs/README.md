@@ -93,7 +93,7 @@ Licensed under GPL-3.0 — share the love, keep it open!
 - **Node.js (for frontend development, optional)**
 - **PostgreSQL database (Supabase recommended)**
 - **pip packages:**  
-  `fastapi hypercorn python-socketio[asgi] starlette jinja2 python-multipart slowapi python-dotenv itsdangerous bcrypt requests numpy librosa aubio praat-parselmouth asyncpg openai`
+  See `requirements.txt` for the full list. Key packages include FastAPI, Hypercorn, python-socketio, asyncpg, librosa, aubio, praat-parselmouth, and openai.
 
 ### Environment Variables
 
