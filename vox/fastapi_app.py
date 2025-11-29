@@ -56,6 +56,25 @@ async def startup_event():
     else:
         logger.warning("SUPABASE_DB_URL not set, database features will be unavailable")
         app.state.db_pool = None
+    
+    # Start background task for periodic cleanup of old recordings
+    asyncio.create_task(periodic_cleanup())
+
+async def periodic_cleanup():
+    """
+    Periodically cleans up old recordings (runs every 24 hours).
+    Removes recordings older than 40 days to manage disk space.
+    """
+    from vox.utils import cleanup_old_recordings
+    while True:
+        try:
+            logger.info("Running periodic cleanup of old recordings...")
+            cleanup_old_recordings()
+            logger.info("Periodic cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during periodic cleanup: {e}")
+        # Wait 24 hours before next cleanup
+        await asyncio.sleep(24 * 60 * 60)
 
 # Register routers
 app.include_router(main_router)

@@ -1,7 +1,9 @@
 import glob
 import os
+import logging
 from datetime import datetime, timedelta
-from vox.fastapi_app import app
+
+logger = logging.getLogger(__name__)
 
 LLM_PERSONALITY_PROMPT_BASE = (
     "You are Vox, a supportive voice therapy coach built for trans individuals, created by Shelbeely, a trans woman developer. "
@@ -18,10 +20,18 @@ LLM_PERSONALITY_PROMPT_BASE = (
 )
 
 def cleanup_old_recordings():
+    """
+    Cleans up old recordings that are older than 40 days.
+    This helps manage disk space and ensures old data is removed.
+    """
     now = datetime.now()
     cutoff = now - timedelta(days=40)
     cutoff_timestamp = cutoff.timestamp()
     recordings_folder = 'recordings'
+    
+    if not os.path.exists(recordings_folder):
+        return
+    
     for session_dir in glob.glob(os.path.join(recordings_folder, '*')):
         if os.path.isdir(session_dir):
             for file in glob.glob(os.path.join(session_dir, '*.wav')):
@@ -31,9 +41,13 @@ def cleanup_old_recordings():
                         logger.info(f"Deleted old recording: {file}")
                     except Exception as e:
                         logger.error(f"Error deleting {file}: {e}")
-            if not os.listdir(session_dir):
-                os.rmdir(session_dir)
-                logger.info(f"Deleted empty session directory: {session_dir}")
+            # Remove empty directories
+            try:
+                if os.path.exists(session_dir) and not os.listdir(session_dir):
+                    os.rmdir(session_dir)
+                    logger.info(f"Deleted empty session directory: {session_dir}")
+            except Exception as e:
+                logger.error(f"Error deleting directory {session_dir}: {e}")
 
 def log_activity(sid, action, details):
     logger.info(f"Session {sid} - {action}: {details}")

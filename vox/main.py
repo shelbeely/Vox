@@ -6,6 +6,7 @@ import asyncio
 
 from starlette.responses import RedirectResponse
 from vox.database import create_session, get_session
+from vox.csrf import get_csrf_token
 
 router = APIRouter()
 
@@ -45,6 +46,9 @@ async def index(request: Request):
     else:
         new_session = False
 
+    # Store session ID in starlette session for CSRF token generation
+    request.session["id"] = sid
+
     async with pool.acquire() as conn:
         # Fetch user by session from sessions table, then get user info
         session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
@@ -56,7 +60,10 @@ async def index(request: Request):
         user_name = user["user_name"] if user and "user_name" in user else "friend"
         logger.info(f"Session {sid} - login: User '{user_name}' accessed Vox")
 
-    response = templates.TemplateResponse("index.html", {"request": request})
+    # Generate CSRF token for the template
+    csrf_token = await get_csrf_token(request)
+
+    response = templates.TemplateResponse("index.html", {"request": request, "csrf_token": csrf_token})
     # Set session cookie if new
     if new_session:
         response.set_cookie("session_id", sid, max_age=2592000, httponly=True)
