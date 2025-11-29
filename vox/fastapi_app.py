@@ -42,6 +42,9 @@ app.state.logger = logger
 # Database pool (asyncpg)
 app.state.db_pool = None
 
+# Background task reference for cleanup
+app.state.cleanup_task = None
+
 @app.on_event("startup")
 async def startup_event():
     import asyncpg
@@ -58,7 +61,22 @@ async def startup_event():
         app.state.db_pool = None
     
     # Start background task for periodic cleanup of old recordings
-    asyncio.create_task(periodic_cleanup())
+    app.state.cleanup_task = asyncio.create_task(periodic_cleanup())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    # Cancel the cleanup task on shutdown
+    if app.state.cleanup_task:
+        app.state.cleanup_task.cancel()
+        try:
+            await app.state.cleanup_task
+        except asyncio.CancelledError:
+            logger.info("Cleanup task cancelled successfully")
+    
+    # Close database pool
+    if app.state.db_pool:
+        await app.state.db_pool.close()
+        logger.info("Database connection pool closed")
 
 async def periodic_cleanup():
     """

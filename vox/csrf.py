@@ -10,8 +10,13 @@ from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from fastapi import Request, HTTPException, status
 from functools import wraps
 
-# Get secret key from environment or use a default (should be set in production)
-SECRET_KEY = os.environ.get("FASTAPI_SECRET_KEY", "default_secret_key")
+# Get secret key from environment - required for security
+SECRET_KEY = os.environ.get("FASTAPI_SECRET_KEY")
+if not SECRET_KEY:
+    import warnings
+    warnings.warn("FASTAPI_SECRET_KEY not set. Using random key - sessions will not persist across restarts.")
+    SECRET_KEY = secrets.token_hex(32)
+
 CSRF_TOKEN_MAX_AGE = 3600  # Token valid for 1 hour
 
 serializer = URLSafeTimedSerializer(SECRET_KEY, salt="csrf-token")
@@ -46,7 +51,12 @@ async def get_csrf_token(request: Request) -> str:
     The token is stored in the session for reuse.
     """
     session = request.session
-    session_id = session.get("id", "default")
+    session_id = session.get("id")
+    
+    if not session_id:
+        # Generate a temporary session ID for CSRF purposes
+        session_id = secrets.token_hex(16)
+        session["id"] = session_id
     
     # Check if we already have a valid token
     existing_token = session.get("csrf_token")
@@ -65,7 +75,11 @@ async def verify_csrf_token(request: Request) -> bool:
     Checks both form data and headers (for AJAX requests).
     """
     session = request.session
-    session_id = session.get("id", "default")
+    session_id = session.get("id")
+    
+    if not session_id:
+        # No session means no valid CSRF context
+        return False
     
     # Try to get token from form data
     token = None

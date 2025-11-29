@@ -34,11 +34,7 @@ const sessionId = getCookie('session_id') || 'default';
 const socket = io({ query: { sessionId: sessionId } });
 
 // --- Chat history fetch and render on page load ---
-fetch('/chat/history', {
-    headers: {
-        'X-CSRF-Token': csrfToken
-    }
-})
+fetch('/chat/history')
     .then(response => response.json())
     .then(data => {
         const output = document.getElementById("chatArea");
@@ -787,9 +783,7 @@ document.getElementById('submitResetButton').onclick = async () => {
 };
 
 async function fetchProfile(){
-    const res = await fetch('/user/profile', {
-        headers: {'X-CSRF-Token': csrfToken}
-    });
+    const res = await fetch('/user/profile');
     const data = await res.json();
     if(data.status==='success'){
         const info = `
