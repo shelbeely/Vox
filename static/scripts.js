@@ -10,6 +10,14 @@
 // Linktree: https://linktr.ee/Shelbeely
 // GitHub: https://github.com/shelbeely/Vox
 
+// --- CSRF Token ---
+// Get the CSRF token from the meta tag for secure form submissions
+function getCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+const csrfToken = getCsrfToken();
+
 // --- Session management ---
 // Get a cookie value by name, so Vox can remember you between visits
 function getCookie(name) {
@@ -325,6 +333,9 @@ async function saveAndStopRecording() {
 
         fetch('/recordings/save_recording', {
             method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken
+            },
             body: formData
         })
         .then(response => response.json())
@@ -498,7 +509,12 @@ fetch('/user/get_performances')
     });
 
 function clearHistory() {
-    fetch('/recordings/clear_history', { method: 'POST' })
+    fetch('/recordings/clear_history', { 
+        method: 'POST',
+        headers: {
+            'X-CSRF-Token': csrfToken
+        }
+    })
         .then(response => response.json())
         .then(data => {
             if (data.status !== "success") showError('Failed to clear history.');
@@ -516,7 +532,7 @@ function updateUserInfo() {
     if (userName) {
         fetch('/user/set_user_info', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
             body: JSON.stringify({ name: userName, pronouns: userPronouns })
         })
         .then(response => response.json())
@@ -563,7 +579,7 @@ function editUserInfo() {
 function updateTargetGender(targetGender) {
     fetch('/user/set_target_gender', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({ target: targetGender })
     })
     .then(response => response.json())
@@ -627,7 +643,7 @@ async function sendChat() {
     try {
         const response = await fetch('/chat/', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
             body: JSON.stringify({ message })
         });
         const data = await response.json();
@@ -669,7 +685,7 @@ document.getElementById("convertSelectedButton").addEventListener("click", async
     try {
         const response = await fetch('/recordings/convert_recordings', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
             body: JSON.stringify({ paths })
         });
         const result = await response.json();
@@ -711,7 +727,7 @@ document.getElementById('registerButton').onclick = async () => {
     const pronouns = document.getElementById('authPronouns').value.trim();
     const res = await fetch('/auth/register', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken},
         body: JSON.stringify({email, password, name, pronouns})
     });
     const data = await res.json();
@@ -724,7 +740,7 @@ document.getElementById('loginButton').onclick = async () => {
     const password = document.getElementById('authPassword').value.trim();
     const res = await fetch('/auth/login', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken},
         body: JSON.stringify({email, password})
     });
     const data = await res.json();
@@ -746,7 +762,7 @@ document.getElementById('requestResetButton').onclick = async () => {
     const email = document.getElementById('resetEmail').value.trim();
     const res = await fetch('/auth/request_password_reset', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken},
         body: JSON.stringify({email})
     });
     const data = await res.json();
@@ -758,7 +774,7 @@ document.getElementById('submitResetButton').onclick = async () => {
     const password = document.getElementById('newPassword').value.trim();
     const res = await fetch('/auth/reset_password', {
         method: 'POST',
-        headers: {'Content-Type':'application/json'},
+        headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken},
         body: JSON.stringify({token, password})
     });
     const data = await res.json();
@@ -786,7 +802,10 @@ Pronouns: ${data.user_pronouns}<br>
 }
 
 document.getElementById('resendVerificationButton').onclick = async () => {
-    const res = await fetch('/auth/register', {method:'POST'}); // Placeholder, should be a dedicated resend endpoint
+    const res = await fetch('/auth/register', {
+        method:'POST',
+        headers: {'X-CSRF-Token': csrfToken}
+    }); // Placeholder, should be a dedicated resend endpoint
     const data = await res.json();
     alert(data.message);
 };
