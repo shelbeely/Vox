@@ -13,6 +13,10 @@ from vox.limiter import limiter
 
 router = APIRouter()
 
+def get_db(request: Request):
+    """Dependency to get db from app state."""
+    return request.app.state.db
+
 @router.post("/save_recording")
 @limiter.limit("50/hour")
 async def save_recording(
@@ -20,7 +24,8 @@ async def save_recording(
     sid: str = Depends(get_session_id),
     recording: UploadFile = File(...),
     timestamp: str = Form(None),
-    apply_gender_transform: str = Form("false")
+    apply_gender_transform: str = Form("false"),
+    db = Depends(get_db)
 ):
     if not recording:
         return JSONResponse({"status": "error", "message": "No recording file provided"}, status_code=400)
@@ -37,17 +42,19 @@ async def save_recording(
     transformed_filepath = None
 
     if apply_gender_transform.lower() == "true":
-        pool = request.app.state.db_pool
-        async with pool.acquire() as conn:
-            # Look up user via sessions table
-            session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-            user_row = None
-            if session_row and session_row["user_id"]:
-                user_row = await conn.fetchrow(
-                    "SELECT target_gender FROM users WHERE user_id = $1",
-                    session_row["user_id"]
-                )
-        target_gender = user_row["target_gender"] if user_row and user_row["target_gender"] else "unspecified"
+        # Look up user via sessions table
+        async with db.execute("SELECT user_id FROM sessions WHERE session_id = ?", (sid,)) as cursor:
+            session_row = await cursor.fetchone()
+        
+        user_row = None
+        if session_row and session_row[0]:
+            async with db.execute(
+                "SELECT target_gender FROM users WHERE user_id = ?",
+                (session_row[0],)
+            ) as cursor:
+                user_row = await cursor.fetchone()
+        
+        target_gender = user_row[0] if user_row and user_row[0] else "unspecified"
 
         transformed_filename = filename.replace(".wav", "_gendered.wav")
         transformed_filepath = os.path.join(session_dir, transformed_filename)
@@ -60,21 +67,22 @@ async def save_recording(
             logging.error(f"Gender transform error: {e}")
             transformed_filepath = None
 
-    pool = request.app.state.db_pool
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO vocal_data (session_id, timestamp, pitch, hnr, harmonics, formants, recording_path) "
-            "VALUES ($1, $2, NULL, NULL, NULL, NULL, $3)",
-            sid, timestamp, filepath
-        )
-        if transformed_filepath:
-            try:
-                await conn.execute(
-                    "UPDATE vocal_data SET transformed_path = $1 WHERE session_id = $2 AND timestamp = $3",
-                    transformed_filepath, sid, timestamp
-                )
-            except Exception:
-                pass
+    await db.execute(
+        "INSERT INTO vocal_data (session_id, timestamp, pitch, hnr, harmonics, formants, recording_path) "
+        "VALUES (?, ?, NULL, NULL, NULL, NULL, ?)",
+        (sid, timestamp, filepath)
+    )
+    await db.commit()
+    
+    if transformed_filepath:
+        try:
+            await db.execute(
+                "UPDATE vocal_data SET transformed_path = ? WHERE session_id = ? AND timestamp = ?",
+                (transformed_filepath, sid, timestamp)
+            )
+            await db.commit()
+        except Exception:
+            pass
 
     logger = request.app.state.logger
     logger.info(f"Session {sid} - save_recording: saved at {filepath}, transformed: {transformed_filepath}")
@@ -87,21 +95,21 @@ async def save_recording(
 
 @router.post("/clear_history")
 @limiter.limit("50/hour")
-async def clear_history(request: Request, sid: str = Depends(get_session_id)):
-
-    pool = request.app.state.db_pool
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT recording_path FROM vocal_data WHERE session_id = $1",
-            sid
-        )
-        await conn.execute(
-            "DELETE FROM vocal_data WHERE session_id = $1",
-            sid
-        )
+async def clear_history(request: Request, sid: str = Depends(get_session_id), db = Depends(get_db)):
+    async with db.execute(
+        "SELECT recording_path FROM vocal_data WHERE session_id = ?",
+        (sid,)
+    ) as cursor:
+        rows = await cursor.fetchall()
+    
+    await db.execute(
+        "DELETE FROM vocal_data WHERE session_id = ?",
+        (sid,)
+    )
+    await db.commit()
 
     for row in rows:
-        path = row["recording_path"]
+        path = row[0]
         if path and os.path.exists(path):
             try:
                 os.remove(path)
@@ -124,24 +132,26 @@ async def clear_history(request: Request, sid: str = Depends(get_session_id)):
 
 @router.post("/convert_recordings")
 @limiter.limit("50/hour")
-async def convert_recordings(request: Request, sid: str = Depends(get_session_id)):
+async def convert_recordings(request: Request, sid: str = Depends(get_session_id), db = Depends(get_db)):
     data = await request.json()
     paths = data.get("paths", [])
 
     if not paths:
         return JSONResponse({"status": "error", "message": "No recordings provided"}, status_code=400)
 
-    pool = request.app.state.db_pool
-    async with pool.acquire() as conn:
-        # Look up user via sessions table
-        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-        user_row = None
-        if session_row and session_row["user_id"]:
-            user_row = await conn.fetchrow(
-                "SELECT target_gender FROM users WHERE user_id = $1",
-                session_row["user_id"]
-            )
-    target_gender = user_row["target_gender"] if user_row and user_row["target_gender"] else "unspecified"
+    # Look up user via sessions table
+    async with db.execute("SELECT user_id FROM sessions WHERE session_id = ?", (sid,)) as cursor:
+        session_row = await cursor.fetchone()
+    
+    user_row = None
+    if session_row and session_row[0]:
+        async with db.execute(
+            "SELECT target_gender FROM users WHERE user_id = ?",
+            (session_row[0],)
+        ) as cursor:
+            user_row = await cursor.fetchone()
+    
+    target_gender = user_row[0] if user_row and user_row[0] else "unspecified"
 
     from gender_transform import transform_audio_to_gender
 
@@ -155,11 +165,11 @@ async def convert_recordings(request: Request, sid: str = Depends(get_session_id
 
             transform_audio_to_gender(original_path, transformed_path, target_gender)
 
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    "UPDATE vocal_data SET transformed_path = $1 WHERE session_id = $2 AND recording_path = $3",
-                    transformed_path, sid, original_path
-                )
+            await db.execute(
+                "UPDATE vocal_data SET transformed_path = ? WHERE session_id = ? AND recording_path = ?",
+                (transformed_path, sid, original_path)
+            )
+            await db.commit()
         except Exception as e:
             import logging
             logging.error(f"Error converting {original_path}: {e}")
