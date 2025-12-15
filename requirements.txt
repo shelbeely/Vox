@@ -3,7 +3,7 @@ numpy
 librosa
 aubio
 praat-parselmouth
-asyncpg
+aiosqlite
 openai>=1.0.0
 fastapi
 hypercorn
