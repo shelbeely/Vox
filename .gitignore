@@ -1,6 +1,10 @@
 # Ignore environment variable files containing secrets
 .env
 
+# Database files
+*.db
+*.db-journal
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -99,7 +103,8 @@ celerybeat.pid
 *.sage.py
 
 # dotenv
-.env.*
+# But allow .env.example
+!.env.example
 
 # virtualenv
 venv/

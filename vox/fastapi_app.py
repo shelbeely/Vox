@@ -17,7 +17,6 @@ from vox.main import router as main_router
 from vox.recordings import router as recordings_router
 from vox.chat import router as chat_router
 from vox.user import router as user_router
-from vox.auth import router as auth_router
 
 app = FastAPI()
 
@@ -77,10 +76,9 @@ async def shutdown_event():
         await app.state.db.close()
         logger.info("Database connection closed")
 
-# Register routers
+# Register routers (removed auth router - no authentication needed for single-user local app)
 app.include_router(main_router)
 app.include_router(user_router, prefix="/user")
-app.include_router(auth_router, prefix="/auth")
 app.include_router(recordings_router, prefix="/recordings")
 app.include_router(chat_router, prefix="/chat")
 

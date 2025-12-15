@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
-from vox.user import get_session_id
 from vox.limiter import limiter
 from fastapi import status
 
@@ -14,7 +13,7 @@ def get_db(request: Request):
 
 @router.post("/", response_class=JSONResponse)
 @limiter.limit("50/hour")
-async def chat(request: Request, sid: str = Depends(get_session_id), db=Depends(get_db)):
+async def chat(request: Request, db=Depends(get_db)):
     try:
         data = await request.json()
         user_message = data.get("message", "").strip()
@@ -25,22 +24,11 @@ async def chat(request: Request, sid: str = Depends(get_session_id), db=Depends(
                 content={"status": "error", "message": "Empty message"}
             )
 
-        # Look up user via sessions table
-        async with db.execute("SELECT user_id FROM sessions WHERE session_id = ?", (sid,)) as cursor:
-            session_row = await cursor.fetchone()
-        
-        user = None
-        if session_row and session_row[0]:
-            async with db.execute(
-                "SELECT user_name, user_pronouns FROM users WHERE user_id = ?",
-                (session_row[0],)
-            ) as cursor:
-                row = await cursor.fetchone()
-                if row:
-                    user = {'user_name': row[0], 'user_pronouns': row[1]}
-        
-        user_name = user['user_name'] if user and user.get('user_name') else 'friend'
-        user_pronouns = user['user_pronouns'] if user and user.get('user_pronouns') else 'they/them/theirs/themselves'
+        # Get user preferences
+        from vox.database import get_user_preferences
+        user_prefs = await get_user_preferences(db)
+        user_name = user_prefs['user_name'] if user_prefs else 'friend'
+        user_pronouns = user_prefs['user_pronouns'] if user_prefs else 'they/them/theirs/themselves'
 
         from vox.utils import LLM_PERSONALITY_PROMPT_BASE
         from vox.llm import chat_with_llm
@@ -66,12 +54,10 @@ from vox.database import fetch_chat_history_async
 @router.get("/history", response_class=JSONResponse)
 async def chat_history(request: Request, limit: int = Query(50), db=Depends(get_db)):
     """
-    Fetch the most recent chat messages for the current session.
+    Fetch the most recent chat messages.
     """
-    session = request.session
-    sid = session.get('id', 'default')
     try:
-        messages = await fetch_chat_history_async(db, sid, limit)
+        messages = await fetch_chat_history_async(db, limit)
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={"status": "success", "messages": messages}
