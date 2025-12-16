@@ -1,10 +1,10 @@
 import numpy as np
 import asyncio
 import os
-from vox.fastapi_app import sio, get_db_pool, get_socketio, app
+from vox.fastapi_app import sio, get_db, get_socketio, app
 from vox.utils import LLM_PERSONALITY_PROMPT_BASE
 from vox.audio_processing import extract_pitch_parselmouth, extract_hnr_parselmouth, extract_voice_quality_parselmouth, generate_voice_report_parselmouth, extract_harmonics, extract_formants_parselmouth
-from vox.database import save_vocal_data_async, update_recording_path_async
+from vox.database import save_vocal_data_async, update_recording_path_async, get_user_preferences
 from vox.llm import generate_feedback
 
 logger = app.state.logger
@@ -29,31 +29,24 @@ async def handle_stop_recording(sid, data=None):
 
     async def generate_and_emit_feedback():
         try:
-            db_pool = get_db_pool()
-            async with db_pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    "SELECT pitch, hnr, harmonics, formants FROM vocal_data WHERE session_id = $1 ORDER BY timestamp DESC LIMIT 1",
-                    sid
-                )
+            db = get_db()
+            async with db.execute(
+                "SELECT pitch, hnr, harmonics, formants FROM vocal_data ORDER BY timestamp DESC LIMIT 1"
+            ) as cursor:
+                row = await cursor.fetchone()
+            
             if not row:
                 feedback_text = "No recent vocal data found to generate feedback."
             else:
-                pitch = row['pitch']
-                hnr = row['hnr']
-                harmonics = row['harmonics']
-                formants = row['formants']
+                pitch = row[0]
+                hnr = row[1]
+                harmonics = row[2]
+                formants = row[3]
 
-                # Look up user via sessions table
-                async with db_pool.acquire() as conn:
-                    session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-                    user = None
-                    if session_row and session_row["user_id"]:
-                        user = await conn.fetchrow(
-                            "SELECT user_name, user_pronouns FROM users WHERE user_id = $1",
-                            session_row["user_id"]
-                        )
-                user_name = user['user_name'] if user and user['user_name'] else 'friend'
-                user_pronouns = user['user_pronouns'] if user and user['user_pronouns'] else 'they/them/theirs/themselves'
+                # Get user preferences
+                user_prefs = await get_user_preferences(db)
+                user_name = user_prefs['user_name'] if user_prefs else 'friend'
+                user_pronouns = user_prefs['user_pronouns'] if user_prefs else 'they/them/theirs/themselves'
 
                 prompt = LLM_PERSONALITY_PROMPT_BASE + f"""
 User info:
@@ -106,9 +99,9 @@ async def handle_raw_audio(sid, data):
     harmonics = extract_harmonics(audio, final_pitch, 44100)
     formants = extract_formants_parselmouth(audio, 44100)
 
-    db_pool = get_db_pool()
+    db = get_db()
     asyncio.create_task(
-        save_vocal_data_async(db_pool, sid, timestamp, final_pitch, hnr, harmonics, formants, jitter_shimmer, praat_report, logger)
+        save_vocal_data_async(db, timestamp, final_pitch, hnr, harmonics, formants, jitter_shimmer, praat_report, logger)
     )
 
     await sio.emit('audio_analysis', {
@@ -135,9 +128,9 @@ async def handle_save_recording_socket(sid, data):
     timestamp = data['timestamp']
     recording_path = data['recording_path']
 
-    db_pool = get_db_pool()
+    db = get_db()
     asyncio.create_task(
-        update_recording_path_async(db_pool, sid, timestamp, recording_path)
+        update_recording_path_async(db, timestamp, recording_path)
     )
 
     await sio.emit('history_update', {

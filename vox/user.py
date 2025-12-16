@@ -1,41 +1,25 @@
-import uuid
 from fastapi import APIRouter, Request, Depends, status
 from fastapi.responses import JSONResponse
 from vox.limiter import limiter
+from vox.database import get_user_preferences, update_user_preferences, get_all_vocal_data
 
 router = APIRouter()
 
 
-def get_db_pool(request: Request):
-    """Dependency to get db_pool from app state."""
-    return request.app.state.db_pool
-
-
-def get_session_id(request: Request) -> str:
-    """Check if the session id already exists, if not create a new one."""
-    sid = request.session.get("id")
-    if not sid:
-        sid = str(uuid.uuid4())
-        request.session["id"] = sid
-    return sid
+def get_db(request: Request):
+    """Dependency to get db from app state."""
+    return request.app.state.db
 
 
 @router.post("/set_target_gender", response_class=JSONResponse)
 @limiter.limit("50/hour")
-async def set_target_gender(request: Request, sid: str = Depends(get_session_id), db_pool=Depends(get_db_pool)):
+async def set_target_gender(request: Request, db=Depends(get_db)):
     data = await request.json()
     target_gender = data.get("target", "unspecified").strip()
 
-    async with db_pool.acquire() as conn:
-        # Update by user_id from session
-        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-        if session_row:
-            await conn.execute(
-                "UPDATE users SET target_gender = $1 WHERE user_id = $2",
-                target_gender, session_row["user_id"]
-            )
+    await update_user_preferences(db, target_gender=target_gender)
 
-    request.app.state.logger.info(f"Session {sid} - set_target_gender: {target_gender}")
+    request.app.state.logger.info(f"set_target_gender: {target_gender}")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={"status": "success", "target_gender": target_gender}
@@ -44,28 +28,21 @@ async def set_target_gender(request: Request, sid: str = Depends(get_session_id)
 
 @router.post("/set_user_info", response_class=JSONResponse)
 @limiter.limit("50/hour")
-async def set_user_info(request: Request, sid: str = Depends(get_session_id), db_pool=Depends(get_db_pool)):
+async def set_user_info(request: Request, db=Depends(get_db)):
     data = await request.json()
     user_name = data.get("name", "friend").strip()[:50]
     user_pronouns = data.get("pronouns", "they/them/theirs/themselves").strip()
 
     if not user_name:
-        request.app.state.logger.error(f"Session {sid} - set_user_info failed: Name cannot be empty")
+        request.app.state.logger.error(f"set_user_info failed: Name cannot be empty")
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
             content={"status": "error", "message": "Name cannot be empty"}
         )
 
-    async with db_pool.acquire() as conn:
-        # Set user info by user_id from session
-        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-        if session_row:
-            await conn.execute(
-                "UPDATE users SET user_name = $1, user_pronouns = $2 WHERE user_id = $3",
-                user_name, user_pronouns, session_row["user_id"]
-            )
+    await update_user_preferences(db, user_name=user_name, user_pronouns=user_pronouns)
 
-    request.app.state.logger.info(f"Session {sid} - set_user_info: Name: {user_name}, Pronouns: {user_pronouns}")
+    request.app.state.logger.info(f"set_user_info: Name: {user_name}, Pronouns: {user_pronouns}")
     return JSONResponse(
         status_code=status.HTTP_200_OK,
         content={"status": "success", "user_name": user_name, "pronouns": user_pronouns}
@@ -73,28 +50,19 @@ async def set_user_info(request: Request, sid: str = Depends(get_session_id), db
 
 
 @router.get("/get_performances", response_class=JSONResponse)
-async def get_performances(request: Request, sid: str = Depends(get_session_id), db_pool=Depends(get_db_pool)):
-    async with db_pool.acquire() as conn:
-        # Look up user_id from session
-        session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-        user_id = session_row["user_id"] if session_row else None
-        if user_id:
-            rows = await conn.fetch(
-                "SELECT timestamp, pitch, hnr, harmonics, formants, recording_path FROM vocal_data WHERE user_id = $1 ORDER BY timestamp DESC",
-                user_id
-            )
-        else:
-            rows = []
+async def get_performances(request: Request, db=Depends(get_db)):
+    vocal_data = await get_all_vocal_data(db)
+    
     performances = [
         {
-            "timestamp": row['timestamp'].isoformat() if row['timestamp'] else None,
+            "timestamp": row['timestamp'],
             "pitch": row['pitch'],
             "hnr": row['hnr'],
             "harmonics": row['harmonics'],
             "formants": row['formants'],
             "recording_path": row['recording_path']
         }
-        for row in rows
+        for row in vocal_data
     ]
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -103,61 +71,39 @@ async def get_performances(request: Request, sid: str = Depends(get_session_id),
 
 
 @router.api_route("/profile", methods=["GET", "POST"], response_class=JSONResponse)
-async def profile(request: Request, sid: str = Depends(get_session_id), db_pool=Depends(get_db_pool)):
-    async with db_pool.acquire() as conn:
-        if request.method == 'GET':
-            # Fetch user by user_id from session
-            session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-            if not session_row:
-                return JSONResponse(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    content={'status': 'error', 'message': 'User not found'}
-                )
-            user = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", session_row["user_id"])
-            if not user:
-                return JSONResponse(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    content={'status': 'error', 'message': 'User not found'}
-                )
+async def profile(request: Request, db=Depends(get_db)):
+    if request.method == 'GET':
+        user_prefs = await get_user_preferences(db)
+        
+        if not user_prefs:
             return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={
-                    'status': 'success',
-                    'email': user['email'],
-                    'email_verified': user['email_verified'],
-                    'discord_id': user['discord_id'],
-                    'user_name': user['user_name'],
-                    'user_pronouns': user['user_pronouns']
-                }
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={'status': 'error', 'message': 'User preferences not found'}
             )
-        else:
-            data = await request.json()
-            user_name = data.get('name')
-            user_pronouns = data.get('pronouns')
-            updates = []
-            params = []
-            if user_name:
-                updates.append("user_name = $%d" % (len(params)+1))
-                params.append(user_name)
-            if user_pronouns:
-                updates.append("user_pronouns = $%d" % (len(params)+1))
-                params.append(user_pronouns)
-            if not updates:
-                return JSONResponse(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    content={'status': 'error', 'message': 'No updates provided'}
-                )
-            # Update by user_id from session
-            session_row = await conn.fetchrow("SELECT user_id FROM sessions WHERE session_id = $1", sid)
-            if not session_row:
-                return JSONResponse(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    content={'status': 'error', 'message': 'User not found'}
-                )
-            params.append(session_row["user_id"])
-            query = f"UPDATE users SET {', '.join(updates)} WHERE user_id = ${len(params)}"
-            await conn.execute(query, *params)
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                'status': 'success',
+                'user_name': user_prefs['user_name'],
+                'user_pronouns': user_prefs['user_pronouns'],
+                'target_gender': user_prefs['target_gender']
+            }
+        )
+    else:
+        data = await request.json()
+        user_name = data.get('name')
+        user_pronouns = data.get('pronouns')
+        
+        if not user_name and not user_pronouns:
             return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={'status': 'success', 'message': 'Profile updated'}
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={'status': 'error', 'message': 'No updates provided'}
             )
+        
+        await update_user_preferences(db, user_name=user_name, user_pronouns=user_pronouns)
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={'status': 'success', 'message': 'Profile updated'}
+        )

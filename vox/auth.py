@@ -5,6 +5,7 @@ import os
 import secrets
 from datetime import datetime, timedelta
 import asyncio
+import uuid
 
 from vox.limiter import limiter
 
@@ -13,12 +14,12 @@ from email_utils import send_verification_email, send_password_reset_email
 __all__ = ["router"]
 router = APIRouter()
 
-# Dependency to get db_pool from app state
-def get_db_pool(request: Request):
-    return request.app.state.db_pool
+# Dependency to get db from app state
+def get_db(request: Request):
+    return request.app.state.db
 
 @router.post("/register", response_class=JSONResponse)
-async def register(request: Request, db_pool=Depends(get_db_pool)):
+async def register(request: Request, db=Depends(get_db)):
     data = await request.json()
     email = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
@@ -31,24 +32,27 @@ async def register(request: Request, db_pool=Depends(get_db_pool)):
             content={'status': 'error', 'message': 'Email and password required'}
         )
 
-    async with db_pool.acquire() as conn:
-        existing = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
-        if existing:
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={'status': 'error', 'message': 'Email already registered'}
-            )
-
-        password_hash = await asyncio.to_thread(lambda: __import__('bcrypt').hashpw(password.encode(), __import__('bcrypt').gensalt()).decode())
-
-        token = secrets.token_urlsafe(32)
-        expires = datetime.utcnow() + timedelta(hours=24)
-
-        await conn.execute(
-            "INSERT INTO users (email, password_hash, user_name, user_pronouns, verification_token, verification_token_expires) "
-            "VALUES ($1, $2, $3, $4, $5, $6)",
-            email, password_hash, user_name, user_pronouns, token, expires
+    async with db.execute("SELECT * FROM users WHERE email = ?", (email,)) as cursor:
+        existing = await cursor.fetchone()
+    
+    if existing:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'status': 'error', 'message': 'Email already registered'}
         )
+
+    password_hash = await asyncio.to_thread(lambda: __import__('bcrypt').hashpw(password.encode(), __import__('bcrypt').gensalt()).decode())
+
+    token = secrets.token_urlsafe(32)
+    expires = datetime.utcnow() + timedelta(hours=24)
+    user_id = str(uuid.uuid4())
+
+    await db.execute(
+        "INSERT INTO users (user_id, email, password_hash, user_name, user_pronouns, verification_token, verification_token_expires) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (user_id, email, password_hash, user_name, user_pronouns, token, expires.isoformat())
+    )
+    await db.commit()
 
     send_verification_email(email, token)
     return JSONResponse(
@@ -57,7 +61,7 @@ async def register(request: Request, db_pool=Depends(get_db_pool)):
     )
 
 @router.get("/verify_email", response_class=JSONResponse)
-async def verify_email(request: Request, db_pool=Depends(get_db_pool)):
+async def verify_email(request: Request, db=Depends(get_db)):
     token = request.query_params.get('token', '').strip()
     if not token:
         return JSONResponse(
@@ -65,20 +69,26 @@ async def verify_email(request: Request, db_pool=Depends(get_db_pool)):
             content={'status': 'error', 'message': 'Missing token'}
         )
 
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow(
-            "SELECT * FROM users WHERE verification_token = $1 AND verification_token_expires > now()", token
+    async with db.execute(
+        "SELECT * FROM users WHERE verification_token = ? AND verification_token_expires > CURRENT_TIMESTAMP", 
+        (token,)
+    ) as cursor:
+        row = await cursor.fetchone()
+    
+    if not row:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'status': 'error', 'message': 'Invalid or expired token'}
         )
-        if not user:
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={'status': 'error', 'message': 'Invalid or expired token'}
-            )
+    
+    columns = [column[0] for column in cursor.description]
+    user = dict(zip(columns, row))
 
-        await conn.execute(
-            "UPDATE users SET email_verified = TRUE, verification_token = NULL, verification_token_expires = NULL WHERE user_id = $1",
-            user['user_id']
-        )
+    await db.execute(
+        "UPDATE users SET email_verified = 1, verification_token = NULL, verification_token_expires = NULL WHERE user_id = ?",
+        (user['user_id'],)
+    )
+    await db.commit()
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -86,10 +96,9 @@ async def verify_email(request: Request, db_pool=Depends(get_db_pool)):
     )
 
 from vox.database import create_session
-import uuid
 
 @router.post("/login", response_class=JSONResponse)
-async def login(request: Request, db_pool=Depends(get_db_pool)):
+async def login(request: Request, db=Depends(get_db)):
     data = await request.json()
     email = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
@@ -100,30 +109,36 @@ async def login(request: Request, db_pool=Depends(get_db_pool)):
             content={'status': 'error', 'message': 'Email and password required'}
         )
 
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
-        if not user:
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={'status': 'error', 'message': 'Invalid credentials'}
-            )
+    async with db.execute("SELECT * FROM users WHERE email = ?", (email,)) as cursor:
+        row = await cursor.fetchone()
+        if row:
+            columns = [column[0] for column in cursor.description]
+            user = dict(zip(columns, row))
+        else:
+            user = None
+    
+    if not user:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={'status': 'error', 'message': 'Invalid credentials'}
+        )
 
-        if not user['email_verified']:
-            return JSONResponse(
-                status_code=status.HTTP_403_FORBIDDEN,
-                content={'status': 'error', 'message': 'Email not verified'}
-            )
+    if not user['email_verified']:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content={'status': 'error', 'message': 'Email not verified'}
+        )
 
-        valid = await asyncio.to_thread(lambda: __import__('bcrypt').checkpw(password.encode(), user['password_hash'].encode()))
-        if not valid:
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={'status': 'error', 'message': 'Invalid credentials'}
-            )
+    valid = await asyncio.to_thread(lambda: __import__('bcrypt').checkpw(password.encode(), user['password_hash'].encode()))
+    if not valid:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={'status': 'error', 'message': 'Invalid credentials'}
+        )
 
-        # Create a new session for the user
-        session_id = str(uuid.uuid4())
-        await create_session(db_pool, session_id, user_id=user['user_id'])
+    # Create a new session for the user
+    session_id = str(uuid.uuid4())
+    await create_session(db, session_id, user_id=user['user_id'])
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -131,7 +146,7 @@ async def login(request: Request, db_pool=Depends(get_db_pool)):
     )
 
 @router.post("/request_password_reset", response_class=JSONResponse)
-async def request_password_reset(request: Request, db_pool=Depends(get_db_pool)):
+async def request_password_reset(request: Request, db=Depends(get_db)):
     data = await request.json()
     email = data.get('email', '').strip().lower()
     if not email:
@@ -140,22 +155,25 @@ async def request_password_reset(request: Request, db_pool=Depends(get_db_pool))
             content={'status': 'error', 'message': 'Email required'}
         )
 
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", email)
-        if not user:
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content={'status': 'success', 'message': 'If the email exists, a reset link was sent'}
-            )
-
-        token = secrets.token_urlsafe(32)
-        expires = datetime.utcnow() + timedelta(hours=1)
-
-        await conn.execute(
-            "INSERT INTO password_resets (email, token, expires_at) VALUES ($1, $2, $3) "
-            "ON CONFLICT (token) DO UPDATE SET expires_at = $3",
-            email, token, expires
+    async with db.execute("SELECT * FROM users WHERE email = ?", (email,)) as cursor:
+        user = await cursor.fetchone()
+    
+    if not user:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={'status': 'success', 'message': 'If the email exists, a reset link was sent'}
         )
+
+    token = secrets.token_urlsafe(32)
+    expires = datetime.utcnow() + timedelta(hours=1)
+
+    # SQLite doesn't have ON CONFLICT DO UPDATE, so we delete first
+    await db.execute("DELETE FROM password_resets WHERE email = ?", (email,))
+    await db.execute(
+        "INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)",
+        (email, token, expires.isoformat())
+    )
+    await db.commit()
 
     send_password_reset_email(email, token)
     return JSONResponse(
@@ -164,7 +182,7 @@ async def request_password_reset(request: Request, db_pool=Depends(get_db_pool))
     )
 
 @router.post("/reset_password", response_class=JSONResponse)
-async def reset_password(request: Request, db_pool=Depends(get_db_pool)):
+async def reset_password(request: Request, db=Depends(get_db)):
     data = await request.json()
     token = data.get('token', '').strip()
     new_password = data.get('password', '').strip()
@@ -175,30 +193,45 @@ async def reset_password(request: Request, db_pool=Depends(get_db_pool)):
             content={'status': 'error', 'message': 'Token and new password required'}
         )
 
-    async with db_pool.acquire() as conn:
-        reset = await conn.fetchrow(
-            "SELECT * FROM password_resets WHERE token = $1 AND expires_at > now()", token
+    async with db.execute(
+        "SELECT * FROM password_resets WHERE token = ? AND expires_at > CURRENT_TIMESTAMP", 
+        (token,)
+    ) as cursor:
+        row = await cursor.fetchone()
+        if row:
+            columns = [column[0] for column in cursor.description]
+            reset = dict(zip(columns, row))
+        else:
+            reset = None
+    
+    if not reset:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'status': 'error', 'message': 'Invalid or expired token'}
         )
-        if not reset:
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={'status': 'error', 'message': 'Invalid or expired token'}
-            )
 
-        user = await conn.fetchrow("SELECT * FROM users WHERE email = $1", reset['email'])
-        if not user:
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={'status': 'error', 'message': 'User not found'}
-            )
-
-        password_hash = await asyncio.to_thread(lambda: __import__('bcrypt').hashpw(new_password.encode(), __import__('bcrypt').gensalt()).decode())
-
-        await conn.execute(
-            "UPDATE users SET password_hash = $1 WHERE email = $2",
-            password_hash, reset['email']
+    async with db.execute("SELECT * FROM users WHERE email = ?", (reset['email'],)) as cursor:
+        row = await cursor.fetchone()
+        if row:
+            columns = [column[0] for column in cursor.description]
+            user = dict(zip(columns, row))
+        else:
+            user = None
+    
+    if not user:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={'status': 'error', 'message': 'User not found'}
         )
-        await conn.execute("DELETE FROM password_resets WHERE token = $1", token)
+
+    password_hash = await asyncio.to_thread(lambda: __import__('bcrypt').hashpw(new_password.encode(), __import__('bcrypt').gensalt()).decode())
+
+    await db.execute(
+        "UPDATE users SET password_hash = ? WHERE email = ?",
+        (password_hash, reset['email'])
+    )
+    await db.execute("DELETE FROM password_resets WHERE token = ?", (token,))
+    await db.commit()
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,
@@ -224,7 +257,7 @@ async def login_discord():
     )
 
 @router.get("/auth/discord/callback", response_class=JSONResponse)
-async def discord_callback(request: Request, db_pool=Depends(get_db_pool)):
+async def discord_callback(request: Request, db=Depends(get_db)):
     import requests
 
     code = request.query_params.get('code')
@@ -267,9 +300,9 @@ async def discord_callback(request: Request, db_pool=Depends(get_db_pool)):
     email = user_json.get('email')
 
     session = request.session
-    async with db_pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT * FROM users WHERE discord_id = $1", discord_id)
-        # No longer update session_id in users table; session-user link is managed in sessions table
+    async with db.execute("SELECT * FROM users WHERE discord_id = ?", (discord_id,)) as cursor:
+        user = await cursor.fetchone()
+    # No longer update session_id in users table; session-user link is managed in sessions table
 
     return JSONResponse(
         status_code=status.HTTP_200_OK,

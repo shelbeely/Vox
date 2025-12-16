@@ -10,13 +10,13 @@ from slowapi.errors import RateLimitExceeded
 from vox.limiter import limiter
 
 import asyncio
+import aiosqlite
 
 # Routers (to be implemented in each module)
 from vox.main import router as main_router
 from vox.recordings import router as recordings_router
 from vox.chat import router as chat_router
 from vox.user import router as user_router
-from vox.auth import router as auth_router
 
 app = FastAPI()
 
@@ -39,28 +39,46 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 app.state.logger = logger
 
-# Database pool (asyncpg)
-app.state.db_pool = None
+# Database connection (SQLite)
+app.state.db = None
+
+async def init_database():
+    """Initialize SQLite database and create tables if needed."""
+    db_path = os.environ.get("DATABASE_PATH", "vox_data.db")
+    db = await aiosqlite.connect(db_path)
+    db.row_factory = aiosqlite.Row
+    
+    # Read and execute schema
+    schema_path = os.path.join(os.path.dirname(__file__), "../docs/sqlite_schema.sql")
+    if os.path.exists(schema_path):
+        with open(schema_path, "r") as f:
+            schema = f.read()
+        await db.executescript(schema)
+        await db.commit()
+        logger.info(f"Database initialized at {db_path}")
+    else:
+        logger.warning(f"Schema file not found at {schema_path}")
+    
+    return db
 
 @app.on_event("startup")
 async def startup_event():
-    import asyncpg
-    SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
-    if SUPABASE_DB_URL:
-        try:
-            app.state.db_pool = await asyncpg.create_pool(SUPABASE_DB_URL, max_size=10, statement_cache_size=0)
-            logger.info("Database connection pool created successfully")
-        except Exception as e:
-            logger.error(f"Failed to create database pool: {e}")
-            app.state.db_pool = None
-    else:
-        logger.warning("SUPABASE_DB_URL not set, database features will be unavailable")
-        app.state.db_pool = None
+    try:
+        app.state.db = await init_database()
+        logger.info("SQLite database connection created successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        app.state.db = None
 
-# Register routers
+@app.on_event("shutdown")
+async def shutdown_event():
+    if app.state.db:
+        await app.state.db.close()
+        logger.info("Database connection closed")
+
+# Register routers (removed auth router - no authentication needed for single-user local app)
 app.include_router(main_router)
 app.include_router(user_router, prefix="/user")
-app.include_router(auth_router, prefix="/auth")
 app.include_router(recordings_router, prefix="/recordings")
 app.include_router(chat_router, prefix="/chat")
 
@@ -85,12 +103,12 @@ sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 # Create the ASGI app for Socket.IO
 sio_app = socketio.ASGIApp(sio, other_asgi_app=app)
 
-# Export sio and db_pool for use in handlers
+# Export sio and db for use in handlers
 def get_socketio():
     return sio
 
-def get_db_pool():
-    return app.state.db_pool
+def get_db():
+    return app.state.db
 
 # Note: You should now run with:
 # hypercorn vox.fastapi_app:sio_app --bind 0.0.0.0:3000
